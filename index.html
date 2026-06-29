@@ -1,50 +1,88 @@
-<!DOCTYPE html> 
-<html> 
-<head> 
-   <title>Nick is winning</title> 
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Nick is winning</title>
    <link rel="icon" type="image/x-icon" href="happy.ico">
    <meta charset="utf-8">
-   
-   <style> 
+
+   <style>
    body {
       margin: 0;
       overflow: hidden; /* Prevent scrolling */
    }
 
-   #myid { 
-      display: block; 
-      margin: 0 auto; 
+   #myid {
+      display: block;
+      margin: 0 auto;
    }
 
-   #outpic { 
-      position: absolute; 
-      top: 0px; 
-      left: 0px; 
-      width: 100%; 
-      height: 100%; 
-      background: #000; 
-      display: flex; 
-      align-items: center; 
+   #outpic {
+      position: absolute;
+      top: 0px;
+      left: 0px;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      align-items: center;
       justify-content: center; /* Center the content horizontally and vertically */
    }
 
    video {
       width: 100%; /* Make the video fill the container */
    }
+
+   #secretPopup {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+   }
+
+   #secretPopup.show {
+      display: flex;
+   }
+
+   #secretPopup video {
+      width: 90%;
+      max-height: 90%;
+   }
+
+   #closeSecretPopup {
+      position: absolute;
+      top: 20px;
+      right: 25px;
+      font-size: 36px;
+      line-height: 36px;
+      color: #fff;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      z-index: 10000;
+   }
    </style>
-</head> 
+</head>
 <body>
     <script>
+        var videoClickCount = 0;
+        var secretPopupShown = false;
+
         function loadVideo() {
           var audio = document.getElementById("audio");
           var outpic = document.getElementById("outpic");
-          
+
           // Get video URL from URL parameter or use default
           var videoUrl = getParameterByName("video") || "grandma.mp4";
-          
+
           // Get audio URL from URL parameter or use default
           var audioUrl = getParameterByName("audio") || "spanishsong.mp3";
-          
+
           // Check if video is already loaded
           if (!document.getElementById("video")) {
             // Create a video element
@@ -55,16 +93,60 @@
             video.loop = true;
             video.muted = true; // Mute the video to play along with audio
             video.setAttribute("playsinline", ""); // Enable inline playback on iOS
-            
+            video.addEventListener("click", countVideoClick);
+
             // Replace the image with the video
             outpic.innerHTML = "";
             outpic.appendChild(video);
-            
+
             // Set the new audio source
             audio.src = audioUrl;
             audio.loop = true;
             audio.play();
           }
+        }
+
+        function countVideoClick(event) {
+          event.stopPropagation();
+
+          if (secretPopupShown) {
+            return;
+          }
+
+          videoClickCount++;
+
+          if (videoClickCount >= 56) {
+            showSecretPopup();
+          }
+        }
+
+        function showSecretPopup() {
+          var popup = document.getElementById("secretPopup");
+          var secretVideo = document.getElementById("secretVideo");
+          var audio = document.getElementById("audio");
+
+          secretPopupShown = true;
+
+          // Pause the background audio so the secret video can be heard clearly.
+          audio.pause();
+
+          // Load sample.mp4 only when the secret popup appears.
+          if (!secretVideo.src) {
+            secretVideo.src = "sample.mp4";
+            secretVideo.load();
+          }
+
+          popup.classList.add("show");
+          secretVideo.currentTime = 0;
+          secretVideo.play();
+        }
+
+        function closeSecretPopup() {
+          var popup = document.getElementById("secretPopup");
+          var secretVideo = document.getElementById("secretVideo");
+
+          secretVideo.pause();
+          popup.classList.remove("show");
         }
 
         // Function to get URL parameters by name
@@ -80,7 +162,12 @@
     </script>
    <audio id="audio" src="your_default_audio.mp3"></audio>
    <div id="outpic" onclick="loadVideo();">
-      <img alt="picture" id="myid" src="play.png"> 
+      <img alt="picture" id="myid" src="play.png">
+   </div>
+
+   <div id="secretPopup">
+      <button id="closeSecretPopup" onclick="closeSecretPopup();" aria-label="Close secret popup">&times;</button>
+      <video id="secretVideo" controls playsinline preload="none"></video>
    </div>
 </body>
 </html>
