@@ -844,6 +844,7 @@
   });
   $$('.strength').forEach(input=>input.addEventListener('input',()=>{const i=+input.id.slice(-1);customDecks[i]=null;$(`[data-custom="${i}"]`).textContent='Use Custom Deck';$(`#strength-value-${i}`).textContent=input.value}));
   $('#title-play').addEventListener('click',()=>{$('#title').classList.add('hidden');$('#setup').classList.remove('hidden')});
+  $('#setup-main-menu').addEventListener('click',()=>leaveDuel());
   const customReady=window.MMCustom.init({builtins:[...Object.keys(MONSTERS),...Object.keys(MAGIC)],register:registerCustomCards,message:toast});
   $('#create-card').onclick=()=>window.MMCustom.open();
   $('#start-game').disabled=true;customReady.finally(()=>{$('#start-game').disabled=false});
@@ -852,5 +853,5 @@
   state.controllers.forEach((_,i)=>syncControllerName(i));
   $$('.hand,.field').forEach(row=>{row.addEventListener('wheel',e=>{if(row.scrollWidth>row.clientWidth){e.preventDefault();row.scrollLeft+=e.deltaY||e.deltaX}},{passive:false});row.addEventListener('keydown',e=>{if(e.target===row&&['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();row.scrollLeft+=(e.key==='ArrowRight'?1:-1)*100}})});
   $('#start-game').addEventListener('click',begin);$('#how-to').addEventListener('click',showRules);$('#menu-button').addEventListener('click',openMenu);$('#end-turn').addEventListener('click',endTurn);$('#opponent-target').addEventListener('click',attackPlayer);
-  document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('#game').classList.contains('hidden'))endTurn();if(e.key==='Escape'&&!$('#game').classList.contains('hidden')&&!$('#modal').open)openMenu()});
+  document.addEventListener('keydown',e=>{if(e.target?.closest?.('input,textarea,select,[contenteditable="true"],#online-chat'))return;if(e.key==='Enter'&&!$('#game').classList.contains('hidden'))endTurn();if(e.key==='Escape'&&!$('#game').classList.contains('hidden')&&!$('#modal').open)openMenu()});
 })();

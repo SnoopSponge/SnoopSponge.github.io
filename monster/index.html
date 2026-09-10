@@ -56,6 +56,7 @@
     </section>
     <section id="setup" class="screen setup-screen hidden">
       <h1>Player Setup</h1>
+      <button id="setup-main-menu" class="metal-button setup-main-menu">Main Menu</button>
       <div class="setup-grid">
         <div class="duelist duelist-blue">
           <label>Enter Name:<input id="p1-name" maxlength="16" value="Player 1"></label>
@@ -155,6 +156,15 @@
   <audio id="card-sound" src="assets/card.mp3" preload="auto"></audio>
   <audio id="hit-sound" src="assets/hit.mp3" preload="auto"></audio>
   <script src="custom-cards.js"></script>
+  <aside id="online-chat" class="online-chat hidden" aria-label="Opponent chat">
+    <button id="chat-toggle" aria-expanded="false" aria-controls="chat-panel">Chat</button>
+    <section id="chat-panel" class="hidden">
+      <header><strong>Opponent chat</strong><button id="chat-close" aria-label="Close chat">×</button></header>
+      <div id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+      <form id="chat-form"><label for="chat-input">Message</label><div><input id="chat-input" maxlength="300" autocomplete="off" placeholder="Type a message…"><button type="submit">Send</button></div></form>
+      <p id="chat-status" role="status"></p>
+    </section>
+  </aside>
   <script src="online.js"></script>
   <script src="game.js"></script>
 </body>

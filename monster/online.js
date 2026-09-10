@@ -58,9 +58,14 @@
   }
   let transport=null,bridge=null,rules=null,me=null,other=null,isHost=false,active=false,ready=false,remoteReady=false,started=false,revision=0,commandID=0,lastCommand=0,pending=false,applying=false,deadline=0,clock=null,deadlineTurn=-1,building=false,receivedOffer=false,mode='private',flow=0;
   const status=text=>{$('#online-status').textContent=text};
+  let chatOpen=false,unread=0,lastChatSent=0,lastChatReceived=0;
+  function showChat(open){chatOpen=open;$('#chat-panel').classList.toggle('hidden',!open);$('#chat-toggle').setAttribute('aria-expanded',String(open));if(open){unread=0;$('#chat-toggle').textContent='Chat';$('#chat-messages').scrollTop=$('#chat-messages').scrollHeight}}
+  function resetChat(){showChat(false);unread=0;lastChatSent=0;lastChatReceived=0;$('#chat-messages').replaceChildren();$('#chat-input').value='';$('#chat-status').textContent='';$('#chat-toggle').textContent='Chat';$('#online-chat').classList.add('hidden')}
+  function appendChat(name,text,incoming){const row=document.createElement('p'),author=document.createElement('strong'),body=document.createElement('span');author.textContent=name+': ';body.textContent=text;row.append(author,body);$('#chat-messages').append(row);while($('#chat-messages').children.length>100)$('#chat-messages').firstElementChild.remove();$('#chat-messages').scrollTop=$('#chat-messages').scrollHeight;if(incoming&&!chatOpen){unread++;$('#chat-toggle').textContent=`Chat (${unread})`}}
+  function sendChat(event){event.preventDefault();const text=$('#chat-input').value.trim();if(!active||transport?.channel?.readyState!=='open'){ $('#chat-status').textContent='Chat is available during a connected match.';return}if(!text)return;if(text.length>300)return;if(Date.now()-lastChatSent<1000){$('#chat-status').textContent='Please wait a moment before sending again.';return}lastChatSent=Date.now();send({kind:'chat',text});appendChat('You',text,false);$('#chat-input').value='';$('#chat-status').textContent=''}
   function send(data){transport?.send({version:VERSION,...data})}
   function summary(r){return `${r.set==='original'?'Original':'Expanded'} cards · ${r.strength} strength · ${r.health} health · ${r.timer?r.timer+'s turns':'No timer'} · Barrier ${r.barrier} · First: ${r.first}${r.customDeck?r.bothDecks?' · Both players build decks':' · Host builds a deck':''}`}
-  function clearStatus(){clearInterval(clock);clock=null;deadline=0;$('#online-clock').textContent=''}
+  function clearStatus(){clearInterval(clock);clock=null;deadline=0;$('#online-clock').textContent='';resetChat()}
   function fail(message){status(message);flow++;bridge.closeDeck();building=false;clearStatus();if(active){active=false;bridge.disconnect(message)}else $('#online').classList.remove('hidden');transport?.close();$('#online-ready').disabled=true;$('#online-cancel').textContent='Back';}
   function readRules(){const out={...PUBLIC_RULES};for(const k of ['set','strength','health','timer','barrier','first']){const v=$(`[data-online="${k}"]`).value;out[k]=['strength','health','timer','barrier'].includes(k)?+v:v}out.customDeck=$('#online-custom-deck').checked;out.bothDecks=out.customDeck&&$('#online-both-decks').checked;return validateOptions(out)}
   function localProfile(){return profile({name:$('#online-name').value,avatar:+$('#online-avatar').value,deck:null})}
@@ -85,6 +90,7 @@
   async function receive(message){
     try{
       if(message?.version!==VERSION)throw Error('Game versions differ. Both players must use the same updated game.');
+      if(message.kind==='chat'){if(active&&typeof message.text==='string'&&message.text.trim()&&message.text.length<=300&&Date.now()-lastChatReceived>=750){lastChatReceived=Date.now();appendChat(other?.name||'Opponent',message.text.trim(),true)}return}
       if(message.kind==='offer'&&!isHost&&!started&&!receivedOffer){receivedOffer=true;rules=validateOptions(message.rules);if(mode==='public'&&JSON.stringify(rules)!==JSON.stringify(PUBLIC_RULES))throw Error('Public match rules do not match the default preset.');other=profile(message.player);remoteReady=message.ready===true;send({kind:'profile',player:me});review();if(rules.customDeck&&rules.bothDecks)buildDeck();return}
       if(message.kind==='profile'&&isHost&&!started&&!remoteReady){other=profile(message.player);bridge.validateDeck(other.deck,rules);if(!rules.bothDecks&&other.deck)throw Error('This match uses a generated guest deck.');review();return}
       if(message.kind==='ready'&&!started&&other){if(isHost&&rules.customDeck&&rules.bothDecks&&!other.deck)throw Error('The guest must finish building their deck.');remoteReady=true;review();if(isHost&&ready)start();return}
@@ -96,7 +102,7 @@
       if(message.kind==='leave'){fail('Your opponent left the match.');return}
     }catch(e){fail(e.message)}
   }
-  function hideLobby(){$('#online').classList.add('hidden');$('#title').classList.add('hidden');$('#game').classList.remove('hidden');clearInterval(clock);clock=setInterval(tick,250)}
+  function hideLobby(){$('#online').classList.add('hidden');$('#title').classList.add('hidden');$('#game').classList.remove('hidden');resetChat();$('#online-chat').classList.remove('hidden');clearInterval(clock);clock=setInterval(tick,250);tick()}
   function start(){
     if(started||!isHost||!ready||!remoteReady)return;
     started=true;active=true;revision=0;deadlineTurn=-1;
@@ -122,7 +128,7 @@
   function tick(){
     if(!active)return;
     const remaining=deadline?Math.max(0,Math.ceil((deadline-Date.now())/1000)):null;
-    $('#online-clock').textContent=`Online · You: ${me.name}${remaining===null?'':` · ${remaining}s`}`;
+    $('#online-clock').textContent=remaining===null?'Online':`Online - ${remaining}s`;
     if(isHost&&remaining===0&&!applying&&!bridge.blocked()){applying=true;Promise.resolve(bridge.timeout()).finally(()=>{applying=false;publish();bridge.draw()})}
   }
   function cancel(){flow++;bridge.closeDeck();building=false;if(active)send({kind:'leave'});transport?.close();transport=null;active=false;started=false;ready=false;remoteReady=false;other=null;pending=false;applying=false;clearStatus();$('#online').classList.add('hidden');$('#title').classList.remove('hidden');freezeForm(false);}
@@ -154,6 +160,7 @@
   }
   window.MMOnline={
     init(api){bridge=api;$('#title-public').onclick=()=>open('public');$('#title-private').onclick=()=>open('private');$('#online-host').onclick=()=>begin('host');$('#online-public').onclick=()=>begin('public');$('#online-join').onclick=()=>begin('join');$('#online-back').onclick=cancel;$('#online-cancel').onclick=cancel;
+      $('#chat-toggle').onclick=()=>showChat(!chatOpen);$('#chat-close').onclick=()=>showChat(false);$('#chat-form').onsubmit=sendChat;
       $('#online-custom-deck').onchange=()=>{$('#online-both-decks-label').classList.toggle('hidden',!$('#online-custom-deck').checked);if(!$('#online-custom-deck').checked)$('#online-both-decks').checked=false};
       $('#online-ready').onclick=()=>{try{markReady()}catch(e){fail(e.message)}};
       $('#online-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#online-invite').value);status('Invite link copied.')}catch{$('#online-invite').select();status('Select and copy the invite link.')}};
