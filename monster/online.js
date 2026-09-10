@@ -6,9 +6,9 @@
   const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const $=s=>document.querySelector(s);
   const options={set:['expanded','original'],strength:[1500,2000,2500],health:[20,30,40],timer:[0,30,60,90],barrier:[0,2,4],first:['random','host','guest'],limits:['normal'],customDeck:[false,true],bothDecks:[false,true]};
-  const PUBLIC_RULES=Object.freeze({set:'expanded',strength:2000,health:20,timer:0,barrier:2,first:'random',limits:'normal',customDeck:false,bothDecks:false});
+  const PUBLIC_RULES=Object.freeze({set:'expanded',strength:2000,health:20,timer:60,barrier:2,first:'random',limits:'normal',customDeck:false,bothDecks:false});
   function validateOptions(value){const out={};for(const [key,allowed] of Object.entries(options)){if(!allowed.includes(value?.[key]))throw Error('Unsupported match rules. Update both copies of the game.');out[key]=value[key]}return out}
-  function queueKey(){return VERSION+':public'}
+  function queueKey(){return VERSION+':public:60s'}
   function profile(value){if(!value||typeof value.name!=='string'||!Number.isInteger(value.avatar)||value.avatar<0||value.avatar>5)throw Error('Invalid player profile.');return {name:value.name.replace(/[<>&"']/g,'').trim().slice(0,16)||'Player',avatar:value.avatar,deck:Array.isArray(value.deck)?value.deck:null}}
   class Transport {
     constructor(callbacks){this.cb=callbacks;this.closed=false;this.signals=Promise.resolve();this.messages=Promise.resolve();this.candidates=[];this.chunks='';this.sendQueue=[]}
@@ -60,7 +60,8 @@
   const status=text=>{$('#online-status').textContent=text};
   function send(data){transport?.send({version:VERSION,...data})}
   function summary(r){return `${r.set==='original'?'Original':'Expanded'} cards · ${r.strength} strength · ${r.health} health · ${r.timer?r.timer+'s turns':'No timer'} · Barrier ${r.barrier} · First: ${r.first}${r.customDeck?r.bothDecks?' · Both players build decks':' · Host builds a deck':''}`}
-  function fail(message){status(message);flow++;bridge.closeDeck();building=false;if(active){active=false;clearInterval(clock);bridge.disconnect(message)}else $('#online').classList.remove('hidden');transport?.close();$('#online-ready').disabled=true;$('#online-cancel').textContent='Back';}
+  function clearStatus(){clearInterval(clock);clock=null;deadline=0;$('#online-clock').textContent=''}
+  function fail(message){status(message);flow++;bridge.closeDeck();building=false;clearStatus();if(active){active=false;bridge.disconnect(message)}else $('#online').classList.remove('hidden');transport?.close();$('#online-ready').disabled=true;$('#online-cancel').textContent='Back';}
   function readRules(){const out={...PUBLIC_RULES};for(const k of ['set','strength','health','timer','barrier','first']){const v=$(`[data-online="${k}"]`).value;out[k]=['strength','health','timer','barrier'].includes(k)?+v:v}out.customDeck=$('#online-custom-deck').checked;out.bothDecks=out.customDeck&&$('#online-both-decks').checked;return validateOptions(out)}
   function localProfile(){return profile({name:$('#online-name').value,avatar:+$('#online-avatar').value,deck:null})}
   function freezeForm(frozen){$('#online-form').disabled=frozen;$('#online-actions').classList.toggle('hidden',frozen);$('#online-session').classList.toggle('hidden',!frozen)}
@@ -124,7 +125,7 @@
     $('#online-clock').textContent=`Online · You: ${me.name}${remaining===null?'':` · ${remaining}s`}`;
     if(isHost&&remaining===0&&!applying&&!bridge.blocked()){applying=true;Promise.resolve(bridge.timeout()).finally(()=>{applying=false;publish();bridge.draw()})}
   }
-  function cancel(){flow++;bridge.closeDeck();building=false;if(active)send({kind:'leave'});transport?.close();transport=null;active=false;started=false;ready=false;remoteReady=false;other=null;pending=false;applying=false;clearInterval(clock);$('#online-clock').textContent='';$('#online').classList.add('hidden');$('#title').classList.remove('hidden');freezeForm(false);}
+  function cancel(){flow++;bridge.closeDeck();building=false;if(active)send({kind:'leave'});transport?.close();transport=null;active=false;started=false;ready=false;remoteReady=false;other=null;pending=false;applying=false;clearStatus();$('#online').classList.add('hidden');$('#title').classList.remove('hidden');freezeForm(false);}
   async function begin(kind){
     try{
       if(!window.RTCPeerConnection||!window.WebSocket)throw Error('This browser does not support online play. Use a current Chrome, Firefox, Edge or Safari browser.');
@@ -157,7 +158,7 @@
       $('#online-ready').onclick=()=>{try{markReady()}catch(e){fail(e.message)}};
       $('#online-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#online-invite').value);status('Invite link copied.')}catch{$('#online-invite').select();status('Select and copy the invite link.')}};
       window.addEventListener('beforeunload',()=>transport?.close());if(new URLSearchParams(location.hash.slice(1)).has('mm-online'))open('join');
-    },input,publish,cancel,open,
+    },input,publish,cancel,open,clearStatus,
     get active(){return active},get seat(){return isHost?0:1},get applying(){return applying},get host(){return isHost},get waiting(){return pending},
     battle(data){if(active&&isHost)send({kind:'battle',...data})},
     surrender(){if(!active)return;if(isHost){bridge.surrender(0);publish()}else send({kind:'surrender'})},

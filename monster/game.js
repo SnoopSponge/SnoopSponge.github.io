@@ -715,6 +715,7 @@
   function syncControllerName(i){const input=$(`#p${i+1}-name`);input.disabled=state.controllers[i]==='computer';if(input.disabled)input.value='Computer';else if(input.value==='Computer')input.value=`Player ${i+1}`}
   function openingHand(p){draw(p,5)}
   function begin(){
+    online?.clearStatus();
     state.session++;state.paused=false;state.over=false;departingCards.clear();visibleCards.clear();
     state.controllers.forEach((_,i)=>syncControllerName(i));
     const names=state.controllers.map((controller,i)=>controller==='computer'?'Computer':$(`#p${i+1}-name`).value.trim()||`Player ${i+1}`);
