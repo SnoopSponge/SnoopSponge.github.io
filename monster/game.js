@@ -167,16 +167,18 @@
     }
     return names;
   }
-  function openDeckBuilder(index){
-    let draft=[...(customDecks[index]||[])];
-    let ignoreLimits=ignoreDeckLimits[index];
-    const rules=activeDeckRules();draft=draft.filter(name=>rules[name]).slice(0,DECK_SIZE);
+  function openDeckBuilder(index,match=null){
+    let draft=[...(match?.deck||(!match&&customDecks[index])||[])];
+    let ignoreLimits=match?false:ignoreDeckLimits[index];
+    const rules=match?Object.fromEntries(Object.entries(DECK_RULES).filter(([n])=>!customDefinitions.has(n)&&(match.rules.set!=='original'||!NEW_DECK_CARDS.has(n)))):activeDeckRules();draft=draft.filter(name=>rules[name]).slice(0,DECK_SIZE);
     const screen=document.createElement('section');screen.className='screen deck-builder';
     screen.innerHTML='<h1></h1><div class="ignore-limits"><label><input type="checkbox" data-ignore-limits> Ignore Limits</label></div><div class="deck-catalog"></div><footer><div class="deck-summary" aria-live="polite"></div><div class="deck-actions"><button data-fill>Fill</button><button data-clear>Clear</button><button data-cancel>Cancel</button><button data-save>OK</button></div></footer>';
     screen.querySelector('[data-ignore-limits]').checked=ignoreLimits;
+    if(match){screen.querySelector('.ignore-limits').classList.add('hidden');screen.querySelector('[data-save]').textContent='Ready';screen.classList.add('online-deck-builder')}
     screen.querySelector('[data-ignore-limits]').onchange=e=>{ignoreLimits=e.target.checked;update()};
-    screen.querySelector('h1').textContent=`${$(`#p${index+1}-name`).value||`Player ${index+1}`}, create your deck`;
+    screen.querySelector('h1').textContent=`${match?.name||$(`#p${index+1}-name`).value||`Player ${index+1}`}, create your deck`;
     $('#setup').classList.add('hidden');$('#setup').after(screen);
+    if(match)$('#online').classList.add('hidden');
     const owner={index,field:[],hand:[],deploys:1};
     const catalog=screen.querySelector('.deck-catalog');
     for(const [name,rule] of Object.entries(rules)){
@@ -193,14 +195,15 @@
     function update(){
       for(const item of catalog.children){const n=draft.filter(n=>n===item.dataset.name).length;item.querySelector('output').textContent=n;const buttons=item.querySelectorAll('.deck-quantity button');buttons[0].disabled=n===0;buttons[1].disabled=draft.length>=DECK_SIZE||(!ignoreLimits&&n>=rules[item.dataset.name].limit)}
       const overLimit=!ignoreLimits&&draft.some(n=>draft.filter(x=>x===n).length>rules[n].limit);
-      screen.querySelector('.deck-summary').textContent=`Cards: ${draft.length}/${DECK_SIZE} · Deck Strength: ${draft.reduce((sum,n)=>sum+rules[n].cost,0)}${overLimit?' · Reduce excess copies or enable Ignore Limits.':''}`;
-      screen.querySelector('[data-save]').disabled=overLimit||draft.length!==DECK_SIZE;
+      const strength=draft.reduce((sum,n)=>sum+rules[n].cost,0),overStrength=match&&strength>match.rules.strength;
+      screen.querySelector('.deck-summary').textContent=`Cards: ${draft.length}/${DECK_SIZE} · Deck Strength: ${strength}${match?`/${match.rules.strength}`:''}${overLimit?' · Reduce excess copies.':''}${overStrength?' · Reduce deck strength.':''}`;
+      screen.querySelector('[data-save]').disabled=overLimit||overStrength||draft.length!==DECK_SIZE;
     }
-    function close(){screen.remove();$('#setup').classList.remove('hidden')}
-    screen.querySelector('[data-fill]').onclick=()=>{draft=fillDeck(draft,+$(`#strength-${index}`).value,ignoreLimits);update()};
+    function close(){screen.remove();$(match?'#online':'#setup').classList.remove('hidden')}
+    screen.querySelector('[data-fill]').onclick=()=>{try{draft=match?onlineDeck(owner,match.rules,null,draft).map(c=>c.name):fillDeck(draft,+$(`#strength-${index}`).value,ignoreLimits);update()}catch(e){screen.querySelector('.deck-summary').textContent=e.message}};
     screen.querySelector('[data-clear]').onclick=()=>{draft=[];update()};
-    screen.querySelector('[data-cancel]').onclick=close;
-    screen.querySelector('[data-save]').onclick=()=>{if(screen.querySelector('[data-save]').disabled)return;ignoreDeckLimits[index]=ignoreLimits;customDecks[index]=[...draft];$(`[data-custom="${index}"]`).textContent='Use Custom Deck';$(`#strength-value-${index}`).textContent=draft.reduce((sum,n)=>sum+rules[n].cost,0);close()};
+    screen.querySelector('[data-cancel]').onclick=()=>{close();match?.cancel()};
+    screen.querySelector('[data-save]').onclick=()=>{if(screen.querySelector('[data-save]').disabled)return;if(match){close();match.save([...draft]);return}ignoreDeckLimits[index]=ignoreLimits;customDecks[index]=[...draft];$(`[data-custom="${index}"]`).textContent='Use Custom Deck';$(`#strength-value-${index}`).textContent=draft.reduce((sum,n)=>sum+rules[n].cost,0);close()};
     update();
   }
 
@@ -387,7 +390,7 @@
     animateArrivals();
     $('#opponent-target').style.top=state.current===0?'3%':'54%';$('#opponent-target').setAttribute('aria-label',`Attack ${opponent().name}`);
     $('#turn-label').textContent=`${current().name}’s turn`;
-    $('#end-turn').disabled=state.over || state.animating || current().controller==='computer'||(online?.active&&(online.seat!==state.current||online.waiting));
+    updateTurnControls();
     $('#barrier').classList.toggle('hidden',state.barrier<1); $('#barrier b').textContent=state.barrier;
     $('#hint').textContent=state.selected?targetHint(state.selected):current().controller==='computer'?'The computer is thinking…':'Choose a card to play, or a ready monster to attack.';
     if(online?.active&&state.current!==online.seat)$('#hint').textContent='Waiting for your opponent…';
@@ -399,6 +402,9 @@
     const top=arrived[arrived.length-1];if(top){const card=renderCard(top,'grave');card.classList.add('grave-card');card.disabled=true;pile.append(card)}
     const count=document.createElement('span');count.id=`p${player.index+1}-grave`;count.textContent=arrived.length;pile.append(count);
     if(!top){const label=document.createElement('small');label.textContent='Graveyard';pile.append(label)}
+  }
+  function updateTurnControls(){
+    $('#end-turn').disabled=state.over||state.animating||current()?.controller==='computer'||!!(online?.active&&(online.seat!==state.current||online.waiting));
   }
   function cardBack(card){const d=document.createElement('div');d.className='card-back';if(card)d.dataset.uid=card.uid;return d}
   function targetHint(card){
@@ -727,15 +733,16 @@
   }
   function validateOnlineDeck(deck,rules){
     if(deck===null)return;
-    if(!Array.isArray(deck)||deck.length!==40)throw Error('Select a saved 40-card Player 1 deck, or choose Generate a deck.');
-    for(const name of deck){if(typeof name!=='string'||!Object.hasOwn(DECK_RULES,name)||customDefinitions.has(name)||(rules.set==='original'&&NEW_DECK_CARDS.has(name)))throw Error('Your selected deck contains cards outside this online card set.');if(rules.limits==='normal'&&deck.filter(n=>n===name).length>DECK_RULES[name].limit)throw Error('Your deck exceeds a copy limit. Choose Ignore limits or edit the deck.')}
+    if(!Array.isArray(deck)||deck.length!==40)throw Error('Choose exactly 40 cards before pressing Ready.');
+    for(const name of deck){if(typeof name!=='string'||!Object.hasOwn(DECK_RULES,name)||customDefinitions.has(name)||(rules.set==='original'&&NEW_DECK_CARDS.has(name)))throw Error('Your selected deck contains cards outside this online card set.');if(rules.limits==='normal'&&deck.filter(n=>n===name).length>DECK_RULES[name].limit)throw Error('Your deck exceeds a copy limit. Remove excess copies before pressing Ready.')}
     if(deck.reduce((sum,name)=>sum+DECK_RULES[name].cost,0)>rules.strength)throw Error('Your deck exceeds the selected deck strength. Edit it or choose a higher strength.');
   }
-  function onlineDeck(p,rules,selected){
+  function onlineDeck(p,rules,selected,initial=[]){
     validateOnlineDeck(selected,rules);if(selected)return shuffle(selected.map(n=>makeCard(n,p)));
     const names=Object.keys(DECK_RULES).filter(n=>!customDefinitions.has(n)&&(rules.set!=='original'||!NEW_DECK_CARDS.has(n)));
-    const draft=[];let remaining=rules.strength;
-    for(let i=0;i<40;i++){
+    const draft=[...initial];let remaining=rules.strength-draft.reduce((sum,n)=>sum+DECK_RULES[n].cost,0);
+    if(draft.length>40||remaining<0)throw Error('Reduce your deck strength before using Fill.');
+    for(let i=draft.length;i<40;i++){
       const available=names.filter(n=>rules.limits==='ignore'||draft.filter(x=>x===n).length<DECK_RULES[n].limit);
       const viable=available.filter(n=>{const rest=names.flatMap(x=>Array(Math.min(40,rules.limits==='ignore'?40:Math.max(0,DECK_RULES[x].limit-draft.filter(y=>y===x).length-(x===n?1:0)))).fill(DECK_RULES[x].cost)).sort((a,b)=>a-b);return rest.length>=39-i&&DECK_RULES[n].cost+rest.slice(0,39-i).reduce((a,b)=>a+b,0)<=remaining});
       if(!viable.length)throw Error('Cannot generate a deck for these rules.');
@@ -766,6 +773,8 @@
     }
   }
   const networkBridge={
+    editDeck(config){openDeckBuilder(0,config)},
+    closeDeck(){$$('.online-deck-builder').forEach(el=>el.remove())},
     deck:()=>customDecks[0]?[...customDecks[0]]:[],validateDeck:validateOnlineDeck,
     current:()=>state.current,turn:()=>onlineTurn,blocked:()=>state.over||state.paused||state.animating,
     start(rules,host,guest){

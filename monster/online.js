@@ -1,13 +1,14 @@
 /* NetplayJS protocol v1 adapter. See THIRD-PARTY-NOTICES.md. */
 (() => {
   'use strict';
-  const VERSION='monster-master-online-v1';
+  const VERSION='monster-master-online-v2';
   const SERVER='wss://netplayjs.varunramesh.net/';
   const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const $=s=>document.querySelector(s);
-  const options={set:['expanded','original'],strength:[1500,2000,2500],health:[20,30,40],timer:[0,30,60,90],barrier:[0,2,4],first:['random','host','guest'],limits:['normal','ignore']};
+  const options={set:['expanded','original'],strength:[1500,2000,2500],health:[20,30,40],timer:[0,30,60,90],barrier:[0,2,4],first:['random','host','guest'],limits:['normal'],customDeck:[false,true],bothDecks:[false,true]};
+  const PUBLIC_RULES=Object.freeze({set:'expanded',strength:2000,health:20,timer:0,barrier:2,first:'random',limits:'normal',customDeck:false,bothDecks:false});
   function validateOptions(value){const out={};for(const [key,allowed] of Object.entries(options)){if(!allowed.includes(value?.[key]))throw Error('Unsupported match rules. Update both copies of the game.');out[key]=value[key]}return out}
-  function queueKey(rules){const r=validateOptions(rules);return VERSION+':'+Object.values(r).join(':')}
+  function queueKey(){return VERSION+':public'}
   function profile(value){if(!value||typeof value.name!=='string'||!Number.isInteger(value.avatar)||value.avatar<0||value.avatar>5)throw Error('Invalid player profile.');return {name:value.name.replace(/[<>&"']/g,'').trim().slice(0,16)||'Player',avatar:value.avatar,deck:Array.isArray(value.deck)?value.deck:null}}
   class Transport {
     constructor(callbacks){this.cb=callbacks;this.closed=false;this.signals=Promise.resolve();this.messages=Promise.resolve();this.candidates=[];this.chunks='';this.sendQueue=[]}
@@ -55,29 +56,40 @@
     flush(){while(this.sendQueue.length&&this.channel?.readyState==='open'&&this.channel.bufferedAmount<131072)this.channel.send(this.sendQueue.shift())}
     close(){this.closed=true;for(const timer of [this.connectTimer,this.peerTimer,this.disconnectTimer])clearTimeout(timer);this.channel?.close();this.pc?.close();this.ws?.close();this.sendQueue=[]}
   }
-  let transport=null,bridge=null,rules=null,me=null,other=null,isHost=false,active=false,ready=false,remoteReady=false,started=false,revision=0,commandID=0,lastCommand=0,pending=false,applying=false,deadline=0,clock=null,deadlineTurn=-1;
+  let transport=null,bridge=null,rules=null,me=null,other=null,isHost=false,active=false,ready=false,remoteReady=false,started=false,revision=0,commandID=0,lastCommand=0,pending=false,applying=false,deadline=0,clock=null,deadlineTurn=-1,building=false,receivedOffer=false,mode='private',flow=0;
   const status=text=>{$('#online-status').textContent=text};
   function send(data){transport?.send({version:VERSION,...data})}
-  function summary(r){return `${r.set==='original'?'Original':'Expanded'} cards · ${r.strength} strength · ${r.health} health · ${r.timer?r.timer+'s turns':'No timer'} · Barrier ${r.barrier} · ${r.limits==='ignore'?'Copy limits off':'Normal copy limits'} · First: ${r.first}`}
-  function fail(message){status(message);if(active){active=false;clearInterval(clock);bridge.disconnect(message)}transport?.close();$('#online-ready').disabled=true;$('#online-cancel').textContent='Back';}
-  function readRules(){return validateOptions(Object.fromEntries(Object.keys(options).map(k=>{const v=$(`[data-online="${k}"]`).value;return [k,['strength','health','timer','barrier'].includes(k)?+v:v]})))}
-  function localProfile(){return profile({name:$('#online-name').value,avatar:+$('#online-avatar').value,deck:$('#online-deck').value==='saved'?bridge.deck():null})}
+  function summary(r){return `${r.set==='original'?'Original':'Expanded'} cards · ${r.strength} strength · ${r.health} health · ${r.timer?r.timer+'s turns':'No timer'} · Barrier ${r.barrier} · First: ${r.first}${r.customDeck?r.bothDecks?' · Both players build decks':' · Host builds a deck':''}`}
+  function fail(message){status(message);flow++;bridge.closeDeck();building=false;if(active){active=false;clearInterval(clock);bridge.disconnect(message)}else $('#online').classList.remove('hidden');transport?.close();$('#online-ready').disabled=true;$('#online-cancel').textContent='Back';}
+  function readRules(){const out={...PUBLIC_RULES};for(const k of ['set','strength','health','timer','barrier','first']){const v=$(`[data-online="${k}"]`).value;out[k]=['strength','health','timer','barrier'].includes(k)?+v:v}out.customDeck=$('#online-custom-deck').checked;out.bothDecks=out.customDeck&&$('#online-both-decks').checked;return validateOptions(out)}
+  function localProfile(){return profile({name:$('#online-name').value,avatar:+$('#online-avatar').value,deck:null})}
   function freezeForm(frozen){$('#online-form').disabled=frozen;$('#online-actions').classList.toggle('hidden',frozen);$('#online-session').classList.toggle('hidden',!frozen)}
-  function connected(){status('Connected. Review the rules, then both players press Ready.');if(isHost)send({kind:'offer',rules,player:me});}
+  function connected(){status('Connected. Review the rules, then both players press Ready.');if(isHost)send({kind:'offer',rules,player:{...me,deck:null},ready});}
   function review(){
     $('#online-rules').textContent=summary(rules);
-    $('#online-players').textContent=`${me.name} vs ${other?.name||'Waiting for opponent'}`;
-    $('#online-ready').disabled=!other||ready;$('#online-ready').textContent=ready?'Ready — waiting':'Ready';
+    $('#online-players').textContent=`${me.name}${ready?' — Ready':''} vs ${other?.name||'Waiting for opponent'}${remoteReady?' — Ready':''}`;
+    $('#online-ready').disabled=!other||ready||building;$('#online-ready').textContent=ready?'Ready — waiting':'Ready';
+  }
+  function markReady(){
+    if(started||building||!me||!rules)return;
+    const needsDeck=rules.customDeck&&(isHost||rules.bothDecks);
+    if(needsDeck&&!me.deck)throw Error('Build your 40-card deck before pressing Ready.');
+    bridge.validateDeck(me.deck,rules);ready=true;
+    if(!isHost)send({kind:'profile',player:me});send({kind:'ready'});review();if(isHost&&remoteReady)start();
+  }
+  function buildDeck(){
+    if(building||ready)return;building=true;review();const token=flow;
+    bridge.editDeck({name:me.name,rules,deck:me.deck,save(deck){if(token!==flow)return;try{bridge.validateDeck(deck,rules);me.deck=deck;building=false;markReady()}catch(e){fail(e.message)}},cancel});
   }
   async function receive(message){
     try{
       if(message?.version!==VERSION)throw Error('Game versions differ. Both players must use the same updated game.');
-      if(message.kind==='offer'&&!isHost&&!started){rules=validateOptions(message.rules);other=profile(message.player);bridge.validateDeck(me.deck,rules);send({kind:'profile',player:me});review();return}
-      if(message.kind==='profile'&&isHost&&!started){other=profile(message.player);bridge.validateDeck(other.deck,rules);review();return}
-      if(message.kind==='ready'&&!started&&other){remoteReady=true;review();if(isHost&&ready)start();return}
+      if(message.kind==='offer'&&!isHost&&!started&&!receivedOffer){receivedOffer=true;rules=validateOptions(message.rules);if(mode==='public'&&JSON.stringify(rules)!==JSON.stringify(PUBLIC_RULES))throw Error('Public match rules do not match the default preset.');other=profile(message.player);remoteReady=message.ready===true;send({kind:'profile',player:me});review();if(rules.customDeck&&rules.bothDecks)buildDeck();return}
+      if(message.kind==='profile'&&isHost&&!started&&!remoteReady){other=profile(message.player);bridge.validateDeck(other.deck,rules);if(!rules.bothDecks&&other.deck)throw Error('This match uses a generated guest deck.');review();return}
+      if(message.kind==='ready'&&!started&&other){if(isHost&&rules.customDeck&&rules.bothDecks&&!other.deck)throw Error('The guest must finish building their deck.');remoteReady=true;review();if(isHost&&ready)start();return}
       if(message.kind==='start'&&!isHost&&!started&&ready&&other){started=true;active=true;revision=message.revision;deadline=message.deadline?Date.now()+Math.max(0,message.deadline-message.sentAt):0;await bridge.receive(message.state,true);hideLobby();return}
       if(message.kind==='action'&&isHost&&active){await execute(message,1);return}
-      if(message.kind==='state'&&!isHost&&active){if(!Number.isInteger(message.revision)||message.revision<=revision)return;revision=message.revision;deadline=message.deadline?Date.now()+Math.max(0,message.deadline-message.sentAt):0;await bridge.receive(message.state,false);pending=false;return}
+      if(message.kind==='state'&&!isHost&&active){if(!Number.isInteger(message.revision)||message.revision<=revision)return;revision=message.revision;deadline=message.deadline?Date.now()+Math.max(0,message.deadline-message.sentAt):0;await bridge.receive(message.state,false);pending=false;bridge.draw();return}
       if(message.kind==='battle'&&!isHost&&active){bridge.remoteBattle(message);return}
       if(message.kind==='surrender'&&active&&isHost&&!applying){bridge.surrender(1);publish();return}
       if(message.kind==='leave'){fail('Your opponent left the match.');return}
@@ -112,36 +124,43 @@
     $('#online-clock').textContent=`Online · You: ${me.name}${remaining===null?'':` · ${remaining}s`}`;
     if(isHost&&remaining===0&&!applying&&!bridge.blocked()){applying=true;Promise.resolve(bridge.timeout()).finally(()=>{applying=false;publish();bridge.draw()})}
   }
-  function cancel(){if(active)send({kind:'leave'});transport?.close();transport=null;active=false;started=false;ready=false;remoteReady=false;other=null;pending=false;applying=false;clearInterval(clock);$('#online-clock').textContent='';$('#online').classList.add('hidden');$('#title').classList.remove('hidden');freezeForm(false);}
-  async function begin(mode){
+  function cancel(){flow++;bridge.closeDeck();building=false;if(active)send({kind:'leave'});transport?.close();transport=null;active=false;started=false;ready=false;remoteReady=false;other=null;pending=false;applying=false;clearInterval(clock);$('#online-clock').textContent='';$('#online').classList.add('hidden');$('#title').classList.remove('hidden');freezeForm(false);}
+  async function begin(kind){
     try{
       if(!window.RTCPeerConnection||!window.WebSocket)throw Error('This browser does not support online play. Use a current Chrome, Firefox, Edge or Safari browser.');
-      transport?.close();rules=readRules();me=localProfile();if(mode!=='join')bridge.validateDeck(me.deck,rules);isHost=mode!=='join';ready=false;remoteReady=false;started=false;other=null;commandID=0;lastCommand=0;pending=false;revision=0;
+      flow++;transport?.close();rules=kind==='host'?readRules():{...PUBLIC_RULES};me=localProfile();isHost=kind!=='join';ready=false;remoteReady=false;started=false;other=null;commandID=0;lastCommand=0;pending=false;revision=0;receivedOffer=false;building=false;mode=kind==='public'?'public':kind==='join'?'join':'private';
       freezeForm(true);$('#online-ready').disabled=true;$('#online-share').classList.add('hidden');$('#online-rules').textContent=summary(rules);$('#online-players').textContent='';status('Connecting to the free matchmaking service…');
       const session=new Transport({status,error:fail,role:host=>{isHost=host},open:connected,data:receive});transport=session;
       const id=await session.connect();if(transport!==session||session.closed)return;
-      if(mode==='public'){status('Looking for a player with these same rules… You can cancel at any time.');session.lobby({kind:'match-request',gameID:queueKey(rules),minPlayers:2,maxPlayers:2})}
-      else if(mode==='host'){
+      if(kind==='public'){status('Looking for a public opponent… Everyone uses the same default rules.');session.lobby({kind:'match-request',gameID:queueKey(),minPlayers:2,maxPlayers:2})}
+      else if(kind==='host'){
         const link=new URL(location.href);link.hash='mm-online='+id;$('#online-invite').value=link.href;$('#online-share').classList.remove('hidden');status('Invite ready. Send the link to your friend and keep this page open.');
+        if(rules.customDeck)buildDeck();
       }else{
         const text=$('#online-code').value.trim();const id=text.includes('#')?new URLSearchParams(text.slice(text.indexOf('#')+1)).get('mm-online'):text;
         if(!UUID.test(id||''))throw Error('Paste a valid invite link or room code.');if(id===session.id)throw Error('You cannot join your own match.');status('Joining your friend…');await session.createPeer(id,true);
       }
     }catch(e){fail(e.message)}
   }
-  function open(){
+  function open(kind='private'){
     if(!bridge)return;$('#title').classList.add('hidden');$('#setup').classList.add('hidden');$('#online').classList.remove('hidden');freezeForm(false);status('Private invites or public matching. Both players use the same game version.');
+    mode=kind;$('#online-heading').textContent=kind==='public'?'Play Public Match':kind==='join'?'Join Private Match':'Play Private Match';
+    $('#online-private-settings').classList.toggle('hidden',kind!=='private');$('#online-join-area').classList.toggle('hidden',kind==='public');
+    $('#online-host').classList.toggle('hidden',kind!=='private');$('#online-public').classList.toggle('hidden',kind!=='public');$('#online-join').classList.toggle('hidden',kind==='public');
+    $('#online-public-preset').classList.toggle('hidden',kind!=='public');
     const id=new URLSearchParams(location.hash.slice(1)).get('mm-online');if(id&&UUID.test(id))$('#online-code').value=id;
+    if(kind==='join'&&id&&UUID.test(id))return begin('join');
   }
   window.MMOnline={
-    init(api){bridge=api;$('#title-online').onclick=open;$('#online-host').onclick=()=>begin('host');$('#online-public').onclick=()=>begin('public');$('#online-join').onclick=()=>begin('join');$('#online-back').onclick=cancel;$('#online-cancel').onclick=cancel;
-      $('#online-ready').onclick=()=>{try{bridge.validateDeck(me.deck,rules);ready=true;send({kind:'ready'});review();if(isHost&&remoteReady)start()}catch(e){fail(e.message)}};
+    init(api){bridge=api;$('#title-public').onclick=()=>open('public');$('#title-private').onclick=()=>open('private');$('#online-host').onclick=()=>begin('host');$('#online-public').onclick=()=>begin('public');$('#online-join').onclick=()=>begin('join');$('#online-back').onclick=cancel;$('#online-cancel').onclick=cancel;
+      $('#online-custom-deck').onchange=()=>{$('#online-both-decks-label').classList.toggle('hidden',!$('#online-custom-deck').checked);if(!$('#online-custom-deck').checked)$('#online-both-decks').checked=false};
+      $('#online-ready').onclick=()=>{try{markReady()}catch(e){fail(e.message)}};
       $('#online-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#online-invite').value);status('Invite link copied.')}catch{$('#online-invite').select();status('Select and copy the invite link.')}};
-      window.addEventListener('beforeunload',()=>transport?.close());if(new URLSearchParams(location.hash.slice(1)).has('mm-online'))open();
+      window.addEventListener('beforeunload',()=>transport?.close());if(new URLSearchParams(location.hash.slice(1)).has('mm-online'))open('join');
     },input,publish,cancel,open,
     get active(){return active},get seat(){return isHost?0:1},get applying(){return applying},get host(){return isHost},get waiting(){return pending},
     battle(data){if(active&&isHost)send({kind:'battle',...data})},
     surrender(){if(!active)return;if(isHost){bridge.surrender(0);publish()}else send({kind:'surrender'})},
-    validateOptions,queueKey,Transport
+    validateOptions,queueKey,Transport,PUBLIC_RULES
   };
 })();
