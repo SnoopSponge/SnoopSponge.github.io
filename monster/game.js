@@ -11,7 +11,7 @@
     'Gorilla':[5,2,6,1,1,'Stuns enemy monster on hit'], 'Alien':[5,4,5,2,1,'Takes no damage from failed attacks'],
     'Archer':[4,2,4,1,1,'Takes no damage from failed attacks'], 'Spider':[4,2,4,1,1,'Poisons enemies it bites'],
     'Greebler':[4,3,3,1,1,'Small, fast, and surprisingly fierce'], 'Skeleton':[3,2,3,1,1,'Immune to heal and poison'],
-    'Leprechaun':[2,1,2,0,1,'Steals a card when hitting a player'], 'Rat':[2,1,2,0,1,'Poisons enemies it bites'],
+    'Leprechaun':[2,1,2,0,1,'Steals defeated enemy monsters into your hand'], 'Rat':[2,1,2,0,1,'Poisons enemies it bites'],
     'Slime':[2,4,5,1,1,'Splits into two Mini Slimes when defeated'], 'Witch':[3,3,4,1,1,'Inflicts a random effect when it deals damage'],
     'Werewolf':[4,2,5,1,1,'Gains +1 attack when damaged, up to +2'], 'Ghost':[3,3,2,1,1,'Negates the first successful attack against it'],
     'Mimic':[3,3,3,1,1,"Copies its opponent's attack and defense in battle"], 'Kraken':[7,5,8,3,1,'Deals 1 damage to every enemy monster when summoned'],
@@ -26,7 +26,7 @@
     'Titan Ape':[8,4,9,2,1,'Stuns enemy monster on hit'], 'Alien Overlord':[8,7,8,2,1,'Takes no damage from failed attacks'],
     'Arcane Ranger':[7,5,7,2,1,'Takes no damage from failed attacks'], 'Broodmother':[7,4,7,2,1,'Poisons enemies it bites'],
     'Greebler King':[7,6,6,2,1,'Small crown, enormous ambition'], 'Bone Lord':[6,5,6,2,1,'Immune to heal and poison'],
-    'Fortune Lord':[5,4,5,1,1,'Steals two cards when hitting a player'],
+    'Fortune Lord':[5,4,5,1,1,'Steals defeated enemy monsters into your hand'],
     'Royal Slime':[4,6,8,1,1,'Splits into two Mini Slimes when defeated'],
     'High Witch':[5,5,6,1,1,'Inflicts a random effect when it deals damage'],
     'Alpha Werewolf':[7,4,8,1,1,'Gains +1 attack when damaged, up to +2'],
@@ -158,12 +158,27 @@
   }
   function activeDeckRules(){return Object.fromEntries(Object.entries(DECK_RULES).filter(([name])=>!state.originalOnly||!NEW_DECK_CARDS.has(name)))}
   function fillDeck(initial,strength=2000,ignoreLimits=false){
-    const rules=activeDeckRules(),names=initial.filter(name=>rules[name]);
+    return generateDeck(initial,activeDeckRules(),strength,ignoreLimits);
+  }
+  function generateDeck(initial,rules,strength,ignoreLimits){
+    const names=initial.filter(name=>rules[name]),keys=Object.keys(rules);
+    const cost=()=>names.reduce((sum,n)=>sum+rules[n].cost,0);
+    const remainingCosts=()=>{const counts={};for(const n of names)counts[n]=(counts[n]||0)+1;return keys.flatMap(n=>Array(Math.min(DECK_SIZE,ignoreLimits?DECK_SIZE:Math.max(0,rules[n].limit-(counts[n]||0)))).fill(rules[n].cost)).sort((a,b)=>a-b)};
+    const slots=DECK_SIZE-names.length,pool=remainingCosts();
+    if(slots<0||pool.length<slots)throw Error('Cannot fill this deck with the available cards.');
+    // Preserve chosen cards, even when their costs make the preferred band impossible.
+    const minimum=cost()+pool.slice(0,slots).reduce((a,b)=>a+b,0);
+    const maximum=cost()+(slots?pool.slice(-slots).reduce((a,b)=>a+b,0):0);
+    const low=Math.min(maximum,Math.max(minimum,strength-300));
+    const high=Math.max(minimum,Math.min(maximum,strength+300));
     while(names.length<DECK_SIZE){
-      let available=Object.keys(rules).filter(n=>ignoreLimits||names.filter(x=>x===n).length<rules[n].limit);
-      const target=(strength-names.reduce((sum,n)=>sum+rules[n].cost,0))/(DECK_SIZE-names.length);
-      available.sort((a,b)=>Math.abs(rules[a].cost-target)-Math.abs(rules[b].cost-target));
-      names.push(available[Math.floor(Math.random()*Math.min(12,available.length))]);
+      const viable=keys.filter(n=>{
+        if(!ignoreLimits&&names.filter(x=>x===n).length>=rules[n].limit)return false;
+        names.push(n);const left=DECK_SIZE-names.length,rest=remainingCosts(),total=cost();names.pop();
+        return rest.length>=left&&total+rest.slice(0,left).reduce((a,b)=>a+b,0)<=high&&total+(left?rest.slice(-left).reduce((a,b)=>a+b,0):0)>=low;
+      });
+      if(!viable.length)throw Error('Cannot fill this deck within the strength range. Adjust your selected cards.');
+      names.push(viable[Math.floor(Math.random()*viable.length)]);
     }
     return names;
   }
@@ -195,13 +210,21 @@
     function update(){
       for(const item of catalog.children){const n=draft.filter(n=>n===item.dataset.name).length;item.querySelector('output').textContent=n;const buttons=item.querySelectorAll('.deck-quantity button');buttons[0].disabled=n===0;buttons[1].disabled=draft.length>=DECK_SIZE||(!ignoreLimits&&n>=rules[item.dataset.name].limit)}
       const overLimit=!ignoreLimits&&draft.some(n=>draft.filter(x=>x===n).length>rules[n].limit);
-      const strength=draft.reduce((sum,n)=>sum+rules[n].cost,0),overStrength=match&&strength>match.rules.strength;
-      screen.querySelector('.deck-summary').textContent=`Cards: ${draft.length}/${DECK_SIZE} · Deck Strength: ${strength}${match?`/${match.rules.strength}`:''}${overLimit?' · Reduce excess copies.':''}${overStrength?' · Reduce deck strength.':''}`;
+      const strength=draft.reduce((sum,n)=>sum+rules[n].cost,0),overStrength=match&&strength>match.rules.strength+300;
+      screen.querySelector('.deck-summary').textContent=`Cards: ${draft.length}/${DECK_SIZE} · Deck Strength: ${strength}${match?`/${match.rules.strength+300}`:''}${overLimit?' · Reduce excess copies.':''}${overStrength?' · Reduce deck strength.':''}`;
       screen.querySelector('[data-save]').disabled=overLimit||overStrength||draft.length!==DECK_SIZE;
     }
     function close(){screen.remove();$(match?'#online':'#setup').classList.remove('hidden')}
     screen.querySelector('[data-fill]').onclick=()=>{try{draft=match?onlineDeck(owner,match.rules,null,draft).map(c=>c.name):fillDeck(draft,+$(`#strength-${index}`).value,ignoreLimits);update()}catch(e){screen.querySelector('.deck-summary').textContent=e.message}};
-    screen.querySelector('[data-clear]').onclick=()=>{draft=[];update()};
+    screen.querySelector('[data-clear]').onclick=()=>{
+      draft=[];
+      if(!match){
+        customDecks[index]=null;
+        ignoreDeckLimits[index]=ignoreLimits;
+        $(`#strength-value-${index}`).textContent=$(`#strength-${index}`).value;
+      }
+      update();
+    };
     screen.querySelector('[data-cancel]').onclick=()=>{close();match?.cancel()};
     screen.querySelector('[data-save]').onclick=()=>{if(screen.querySelector('[data-save]').disabled)return;if(match){close();match.save([...draft]);return}ignoreDeckLimits[index]=ignoreLimits;customDecks[index]=[...draft];$(`[data-custom="${index}"]`).textContent='Use Custom Deck';$(`#strength-value-${index}`).textContent=draft.reduce((sum,n)=>sum+rules[n].cost,0);close()};
     update();
@@ -256,7 +279,7 @@
   function animateCardToGrave(card,delay=0){
     if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){finishDeparture(card);return;}
     const source=document.querySelector(`.card[data-uid="${card.uid}"]`);
-    const target=$(`#p${card.owner.index+1}-grave-pile`);
+    const target=Number.isInteger(card.capturedBy)?$(`#p${card.capturedBy+1}-hand`):$(`#p${card.owner.index+1}-grave-pile`);
     if(!source||!target){finishDeparture(card);return;}
     const start=source.getBoundingClientRect(),end=target.getBoundingClientRect();
     const ghost=source.cloneNode(true);ghost.classList.add('discard-flight');ghost.disabled=true;
@@ -337,8 +360,11 @@
     const frozenUi=card.type==='monster'&&effect(card,'Freeze')?'<span class="frozen-overlay"><img src="assets/status-frozen.png" alt=""><b>Frozen</b></span>':'';
     const stats=card.type==='monster'?`<span class="stats"><i class="stat attack">${family(card)==='Mimic'?'?':card.attack}</i><i class="stat defense">${family(card)==='Mimic'?'?':card.defense}</i></span>`:'';
     const brief=card.custom?card.custom.description:card.text;
-    button.innerHTML=`<span class="card-name">${esc(card.name)}</span><img class="card-art" src="assets/${card.custom?'m-greebler.png':img}" alt="">${monsterUi}<span class="card-text">${esc(brief)}</span>${stats}<span class="effect-tags">${tags}</span>${frozenUi}${effect(card,'Stunned')?'<span class="stunned-overlay">Stunned</span>':''}`;
+    button.innerHTML=`<span class="card-name">${esc(card.name)}</span><img class="card-art" src="assets/${card.custom?'m-greebler.png':img}" alt="">${monsterUi}<span class="card-text">${esc(brief)}</span>${stats}<span class="effect-tags">${tags}</span>${frozenUi}${effect(card,'Stunned')?'<span class="stunned-overlay"><img src="assets/status-stunned.svg" alt=""><b>Stunned</b></span>':''}`;
     if(card.custom){button.querySelector('.card-art').src=card.custom.image||'assets/m-greebler.png';button.classList.add('custom-monster');if(card.maxHealth>12)button.classList.add('dense-health')}
+    if(ART_ALIASES[card.name]&&Object.values(UPGRADE_FOR).includes(card.name)){
+      const decal=document.createElement('img');decal.className='upgrade-decal';decal.src='assets/upgrade-overlay.png';decal.alt='';button.append(decal);
+    }
     if(zone!=='grave')button.title=card.name+' — '+card.text+(effectLabel?' | '+effectLabel:'');else button.tabIndex=-1;
     if(zone!=='grave'&&card.type==='monster')button.title+=` | Attack ${family(card)==='Mimic'?'?':card.attack}, defense ${family(card)==='Mimic'?'?':card.defense}, health ${card.health}/${card.maxHealth}`;
     if(zone!=='catalog'){button.addEventListener('click',()=>cardClicked(card,zone));enableDrag(button,card,zone)}return button;
@@ -383,9 +409,9 @@
       }
       nodes.push(...[...remaining.values()].map(c=>renderCard(c,'field')));field.replaceChildren(...nodes);
     }
-    const hand=$('#p1-hand'); const viewing=online?.active?(online.seat===0||(state.revealed&&state.current===online.seat)):state.current===0 || state.revealed;
+    const hand=$('#p1-hand'); const viewing=handVisible(p1);
     hand.replaceChildren(...(viewing?p1.hand.map(c=>renderCard(c,'hand')):p1.hand.map(c=>cardBack(c))));
-    const oppHand=$('#p2-hand'); const reveal=online?.active?(online.seat===1||(state.revealed&&state.current===online.seat)):state.current===1 || state.revealed;
+    const oppHand=$('#p2-hand'); const reveal=handVisible(p2);
     oppHand.replaceChildren(...(reveal?p2.hand.map(c=>renderCard(c,'hand')):p2.hand.map(c=>cardBack(c))));
     animateArrivals();
     $('#opponent-target').style.top=state.current===0?'3%':'54%';$('#opponent-target').setAttribute('aria-label',`Attack ${opponent().name}`);
@@ -395,6 +421,11 @@
     $('#hint').textContent=state.selected?targetHint(state.selected):current().controller==='computer'?'The computer is thinking…':'Choose a card to play, or a ready monster to attack.';
     if(online?.active&&state.current!==online.seat)$('#hint').textContent='Waiting for your opponent…';
     $('#battle-log').replaceChildren(...state.logs.map(x=>{const p=document.createElement('p');p.textContent=x;return p}));
+  }
+  function handVisible(player){
+    if(online?.active)return online.seat===player.index||(state.revealed&&state.current===online.seat);
+    const versusComputer=state.players.some(p=>p.controller==='computer');
+    return state.revealed||(player.controller!=='computer'&&(versusComputer||state.current===player.index));
   }
   function renderGrave(player){
     const pile=$(`#p${player.index+1}-grave-pile`);pile.replaceChildren();
@@ -635,13 +666,26 @@
     customEvent(attacker,'hit',target,damage,animate);
     const thorns=target&&ability(target,'thorns');
     if(damage>0&&thorns&&target.owner.field.includes(target)&&attacker.owner.field.includes(attacker)&&procs(thorns))damageMonster(attacker,thorns.power,animate);
-    if(!target){if(['Leprechaun','Fortune Lord'].includes(attacker.name)){const foe=state.players[1-attacker.owner.index],count=attacker.name==='Fortune Lord'?2:1;let stolenCount=0;for(let i=0;i<count&&foe.hand.length;i++){const stolen=foe.hand.splice(Math.floor(Math.random()*foe.hand.length),1)[0];stolen.owner=attacker.owner;attacker.owner.hand.push(stolen);stolenCount++}if(stolenCount)log(`${attacker.owner.name}'s ${attacker.name} stole ${stolenCount} card${stolenCount===1?'':'s'}.`) }return;}
+    if(!target)return;
     if(['Ogre','Gorilla','Ogre Warlord','Titan Ape'].includes(attacker.name)){target.attacksLeft=0;if(!effect(target,'Stunned'))addEffect(target,'Stunned',false)}
     if(['Reaper','Death Knight'].includes(attacker.name)){if(effect(target,'Reaper'))addEffect(target,'Reaper',false,1);else{target.attack=Math.max(0,target.attack-1);addEffect(target,'Reaper',false,1)}}
     if(['Spider','Rat','Broodmother'].includes(attacker.name)&&target.flesh)addEffect(target,'Poison',false);
     if(['Ninja','Ninja Rat','Shadow Master'].includes(attacker.name)&&target.owner.field.includes(target))damageMonster(target,target.health,animate);
     if(['Vampire','Vampire Lord'].includes(attacker.name))healMonster(attacker,damage);
     if(family(attacker)==='Witch'&&target.owner.field.includes(target))witchHex(target);
+    captureDefeated(attacker,target,damage);
+  }
+  function captureDefeated(attacker,target,damage){
+    if(damage<=0||target.health>0||target.owner===attacker.owner||!target.owner.grave.includes(target))return false;
+    const capture=ability(attacker,'capture');
+    const innate=['Leprechaun','Fortune Lord'].includes(attacker.name);
+    if(!innate&&(!capture||(attacker.abilityUses.capture||0)>=capture.limit||!procs(capture)))return false;
+    target.owner.grave.splice(target.owner.grave.indexOf(target),1);
+    target.capturedBy=attacker.owner.index;
+    attacker.owner.hand.push(makeCard(target.name,attacker.owner));
+    if(!innate)attacker.abilityUses.capture=(attacker.abilityUses.capture||0)+1;
+    log(`${attacker.name} captured ${target.name} for ${attacker.owner.name}'s hand.`);
+    return true;
   }
   function attackPlayer(){
     if(online?.active&&!online.applying){online.input({kind:'attack',uid:state.selected?.uid});return}
@@ -736,20 +780,13 @@
     if(deck===null)return;
     if(!Array.isArray(deck)||deck.length!==40)throw Error('Choose exactly 40 cards before pressing Ready.');
     for(const name of deck){if(typeof name!=='string'||!Object.hasOwn(DECK_RULES,name)||customDefinitions.has(name)||(rules.set==='original'&&NEW_DECK_CARDS.has(name)))throw Error('Your selected deck contains cards outside this online card set.');if(rules.limits==='normal'&&deck.filter(n=>n===name).length>DECK_RULES[name].limit)throw Error('Your deck exceeds a copy limit. Remove excess copies before pressing Ready.')}
-    if(deck.reduce((sum,name)=>sum+DECK_RULES[name].cost,0)>rules.strength)throw Error('Your deck exceeds the selected deck strength. Edit it or choose a higher strength.');
+    if(deck.reduce((sum,name)=>sum+DECK_RULES[name].cost,0)>rules.strength+300)throw Error('Your deck exceeds the selected strength range. Edit it or choose a higher strength.');
   }
   function onlineDeck(p,rules,selected,initial=[]){
     validateOnlineDeck(selected,rules);if(selected)return shuffle(selected.map(n=>makeCard(n,p)));
     const names=Object.keys(DECK_RULES).filter(n=>!customDefinitions.has(n)&&(rules.set!=='original'||!NEW_DECK_CARDS.has(n)));
-    const draft=[...initial];let remaining=rules.strength-draft.reduce((sum,n)=>sum+DECK_RULES[n].cost,0);
-    if(draft.length>40||remaining<0)throw Error('Reduce your deck strength before using Fill.');
-    for(let i=draft.length;i<40;i++){
-      const available=names.filter(n=>rules.limits==='ignore'||draft.filter(x=>x===n).length<DECK_RULES[n].limit);
-      const viable=available.filter(n=>{const rest=names.flatMap(x=>Array(Math.min(40,rules.limits==='ignore'?40:Math.max(0,DECK_RULES[x].limit-draft.filter(y=>y===x).length-(x===n?1:0)))).fill(DECK_RULES[x].cost)).sort((a,b)=>a-b);return rest.length>=39-i&&DECK_RULES[n].cost+rest.slice(0,39-i).reduce((a,b)=>a+b,0)<=remaining});
-      if(!viable.length)throw Error('Cannot generate a deck for these rules.');
-      const target=remaining/(40-i);viable.sort((a,b)=>Math.abs(DECK_RULES[a].cost-target)-Math.abs(DECK_RULES[b].cost-target));
-      const pick=viable[Math.floor(Math.random()*Math.min(8,viable.length))];draft.push(pick);remaining-=DECK_RULES[pick].cost;
-    }
+    const draft=generateDeck(initial,Object.fromEntries(names.map(n=>[n,DECK_RULES[n]])),rules.strength,rules.limits==='ignore');
+    validateOnlineDeck(draft,rules);
     return shuffle(draft.map(n=>makeCard(n,p)));
   }
   function reviveNetwork(value,players){

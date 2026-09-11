@@ -2,6 +2,7 @@
 (() => {
   'use strict';
   const ABILITIES={
+    capture:{label:'Steal defeated monster',help:'After a lethal hit, takes the defeated enemy card into your hand at full health, ready to deploy. Does not steal monsters that survive or revive.',unit:'Cards per defeat',min:1,max:1,value:1,limit:true},
     poison:{label:'Poison on hit',help:'Adds this many poison stacks after damaging a monster.',min:1,max:10,value:1},
     lifesteal:{label:'Life steal',help:'Heals this monster by a percentage of damage dealt (rounded up).',unit:'Percent healed',min:1,max:100,value:50},
     weaken:{label:'Weaken on hit',help:'Reduces the target’s attack after dealing damage.',min:1,max:20,value:1},
