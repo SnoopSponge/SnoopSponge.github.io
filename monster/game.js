@@ -13,7 +13,7 @@
     'Greebler':[4,3,3,1,1,'Small, fast, and surprisingly fierce'], 'Skeleton':[3,2,3,1,1,'Immune to heal and poison'],
     'Leprechaun':[2,1,2,0,1,'Steals defeated enemy monsters into your hand'], 'Rat':[2,1,2,0,1,'Poisons enemies it bites'],
     'Slime':[2,4,5,1,1,'Splits into two Mini Slimes when defeated'], 'Witch':[3,3,4,1,1,'Inflicts a random effect when it deals damage'],
-    'Werewolf':[4,2,5,1,1,'Gains +1 attack when damaged, up to +2'], 'Ghost':[3,3,2,1,1,'Negates the first successful attack against it'],
+    'Werewolf':[4,2,5,1,1,'Gains +1 attack when damaged, up to +2'], 'Ghost':[3,3,2,1,1,'Dealing or receiving a damaging battle hit curses the enemy monster: reduce attack and defense by 1.'],
     'Mimic':[3,3,3,1,1,"Copies its opponent's attack and defense in battle"], 'Kraken':[7,5,8,3,1,'Deals 1 damage to every enemy monster when summoned'],
     'Cyclops':[8,1,6,2,1,'Takes 1 damage whenever its attack fails'],
     'Dragon Rider':[12,6,7,2,1,'Upgraded Knight with overwhelming attack'], 'Death Knight':[8,5,6,2,2,"Two attacks; lowers enemy's attack"],
@@ -30,7 +30,7 @@
     'Royal Slime':[4,6,8,1,1,'Splits into two Mini Slimes when defeated'],
     'High Witch':[5,5,6,1,1,'Inflicts a random effect when it deals damage'],
     'Alpha Werewolf':[7,4,8,1,1,'Gains +1 attack when damaged, up to +2'],
-    'Wraith':[5,5,4,1,1,'Negates the first successful attack against it'],
+    'Wraith':[5,5,4,1,1,'Dealing or receiving a damaging battle hit curses the enemy monster: reduce attack and defense by 1.'],
     'Greater Mimic':[5,5,5,1,1,"Copies its opponent's attack and defense in battle"],
     'Leviathan':[10,7,11,3,1,'Deals 1 damage to every enemy monster when summoned'],
     'Elder Cyclops':[12,3,9,2,1,'Takes 1 damage whenever its attack fails'],
@@ -49,7 +49,7 @@
     'Strip':['downgrade','Remove helpful effects'], 'Psychic':['downgrade','Control an enemy monster for one turn'],
     'Reinforce':['utility','Deploy one extra monster this turn'], 'Black Hole':['utility','Destroy every monster'],
     'Flood':['utility','Deal 1 damage to every monster'], 'Doom':['utility','Destroy the enemy with lowest attack'],
-    'Necromancy':['utility','Summon every Skeleton from your piles'], 'Combine':['utility','Fuse two matching monsters into their upgraded form'],
+    'Necromancy':['utility','Summon every Skeleton from your piles'], 'Combine':['utility','Combines monsters with the same combiner symbol into a super monster'],
     'Steal':['utility',"Steal a card from your opponent's hand"], 'Forget':['utility','Opponent discards two random cards'],
     'Telescope':['utility',"Reveal your opponent's hand"], 'Barrier':['utility','Prevent attacks through your next turn'],
     'Reborn':['utility','Return your strongest fallen monster'], 'Beckon':['utility','Summon the strongest monster from your draw deck onto the board'],
@@ -61,26 +61,46 @@
     'Monster Egg':['utility','Place an egg that hatches into a random monster after two turns']
   };
   const UPGRADE_FOR = {
+    'The Emo':'The Eternal Emo','Emo Robot':'Emo Robot Prime',
     'Slime':'Royal Slime','Witch':'High Witch','Werewolf':'Alpha Werewolf','Ghost':'Wraith','Mimic':'Greater Mimic','Kraken':'Leviathan','Cyclops':'Elder Cyclops',
-    'Hydra':'Hydra Prime','Dragon':'Ancient Dragon','Ogre':'Ogre Warlord','Robot':'War Machine','Reaper':'Death Knight',
-    'Minotaur':'Minotaur King','Dwarf':'Dwarf King','Golem':'Titan Golem','Knight':'Dragon Rider','Cerberus':'Infernal Cerberus',
+    'Hydra':'Hydra Prime','Dragon':'Ancient Dragon','Ogre':'Ogre Warlord','Robot':'War Machine','Reaper':'Grim Reaper',
+    'Minotaur':'Minotaur King','Dwarf':'Dwarf King','Golem':'Titan Golem','Knight':'Royal Knight','Cerberus':'Infernal Cerberus',
     'Vampire':'Vampire Lord','Ninja':'Shadow Master','Gorilla':'Titan Ape','Alien':'Alien Overlord','Archer':'Arcane Ranger',
-    'Spider':'Broodmother','Greebler':'Greebler King','Skeleton':'Bone Lord','Leprechaun':'Fortune Lord','Rat':'Ninja Rat'
+    'Spider':'Broodmother','Greebler':'Greebler King','Skeleton':'Bone Lord','Leprechaun':'Fortune Lord','Rat':'Plague Rat',
+    'Dragon Rider':'Dragon Rider Prime','Death Knight':'Death Knight Prime','Ninja Rat':'Ninja Rat Prime'
   };
-  function family(card){return ART_ALIASES[card.name]&&['Royal Slime','High Witch','Alpha Werewolf','Wraith','Greater Mimic','Leviathan','Elder Cyclops'].includes(card.name)?ART_ALIASES[card.name]:card.name}
-  const COMBOS = Object.entries(UPGRADE_FOR).map(([base,result])=>[base,base,result]);
-  const NON_FLESH = new Set(['Royal Slime','Wraith','Robot','Golem','Skeleton','Ghost','Slime','Mini Slime','Mystery Egg','War Machine','Titan Golem','Bone Lord']);
-  const NON_SENTIENT = new Set(['Royal Slime','Robot','Golem','Slime','Mini Slime','Mystery Egg','War Machine','Titan Golem']);
+  function family(card){return ART_ALIASES[card.name]&&card.name!=='Mini Slime'&&card.name!=='Mystery Egg'?ART_ALIASES[card.name]:card.name}
+  const COMBOS = [['Dragon','Knight','Dragon Rider'],['Reaper','Cerberus','Death Knight'],['Ninja','Rat','Ninja Rat'],['The Emo','Robot','Emo Robot']];
+  const COMBINER_SYMBOLS={Dragon:'★',Knight:'★',Reaper:'☾',Cerberus:'☾',Ninja:'●',Rat:'●','The Emo':'🥀',Robot:'🥀'};
+  function combinerBase(card){return Object.keys(COMBINER_SYMBOLS).find(n=>card.name===n||card.name===UPGRADE_FOR[n])}
+  const NON_FLESH = new Set(['Royal Slime','Wraith','Robot','Emo Robot','Emo Robot Prime','Golem','Skeleton','Ghost','Slime','Mini Slime','Mystery Egg','War Machine','Titan Golem','Bone Lord']);
+  const NON_SENTIENT = new Set(['Royal Slime','Robot','Emo Robot','Emo Robot Prime','Golem','Slime','Mini Slime','Mystery Egg','War Machine','Titan Golem']);
   const MONSTER_POOL = Object.keys(MONSTERS).slice(0,27);
   const MAGIC_POOL = Object.keys(MAGIC);
   const RASTER_SPECIALS = new Set(['Pack A Punch!','Double Strike','Berserk','Undying','Plague','Freeze','Time Warp','Monster Egg']);
-  const ART_ALIASES = {'Royal Slime':'Slime','High Witch':'Witch','Alpha Werewolf':'Werewolf','Wraith':'Ghost','Greater Mimic':'Mimic','Leviathan':'Kraken','Elder Cyclops':'Cyclops','Mini Slime':'Slime','Mystery Egg':'Monster Egg'};
+  const ART_ALIASES = {'Royal Slime':'Slime','High Witch':'Witch','Alpha Werewolf':'Werewolf','Wraith':'Ghost','Greater Mimic':'Mimic','Leviathan':'Kraken','Elder Cyclops':'Cyclops','Mystery Egg':'Monster Egg'};
+  Object.assign(ART_ALIASES,{'The Eternal Emo':'The Emo','Emo Robot Prime':'Emo Robot','Grim Reaper':'Reaper','Royal Knight':'Knight','Plague Rat':'Rat','Dragon Rider Prime':'Dragon Rider','Death Knight Prime':'Death Knight','Ninja Rat Prime':'Ninja Rat'});
+  Object.assign(MONSTERS,{
+    'The Emo':[2,1,3,1,1,'25% chance to enjoy an incoming battle hit and take no damage.'],
+    'The Eternal Emo':[4,3,5,1,1,'25% chance to enjoy an incoming battle hit and take no damage.'],
+    'Emo Robot':[7,6,5,2,1,'25% chance to enjoy an incoming battle hit and take no damage. Immune to heal, poison and psychic.'],
+    'Emo Robot Prime':[10,9,8,2,1,'25% chance to enjoy an incoming battle hit and take no damage. Immune to heal, poison and psychic.'],
+    'Grim Reaper':[8,6,7,2,1,"Lowers enemy's attack on hit"],
+    'Royal Knight':[9,6,7,2,1,'An elite knight with stronger armor and attack'],
+    'Plague Rat':[5,3,5,0,1,'Poisons enemies it bites'],
+    'Dragon Rider Prime':[16,9,11,2,1,'A Pack A Punched Dragon Rider'],
+    'Death Knight Prime':[11,8,10,2,2,"Two attacks; lowers enemy's attack"],
+    'Ninja Rat Prime':[9,5,8,1,1,'Kills any enemy it hits']
+  });
   const NEW_DECK_CARDS = new Set(['Slime','Witch','Werewolf','Ghost','Mimic','Kraken','Cyclops','Pack A Punch!','Double Strike','Berserk','Undying','Plague','Freeze','Time Warp','Monster Egg']);
+  MONSTER_POOL.push('The Emo');NEW_DECK_CARDS.add('The Emo');
+  const EMO_QUOTES=['My heart was already broken.','That matches my mood.','Pain is just another verse.','Even my shadow feels misunderstood.','You call that hurt? I call it poetry.'];
   const DECK_SIZE=40;
   const online=window.MMOnline;
   let onlineTurn=0,remoteRoll=null,onlineEnded=false;
   const DECK_RULES={"Hydra": {"limit": 2, "cost": 90}, "Dragon": {"limit": 2, "cost": 80}, "Ogre": {"limit": 2, "cost": 80}, "Robot": {"limit": 2, "cost": 70}, "Ninja": {"limit": 3, "cost": 70}, "Reaper": {"limit": 3, "cost": 60}, "Knight": {"limit": 3, "cost": 60}, "Alien": {"limit": 3, "cost": 60}, "Minotaur": {"limit": 3, "cost": 50}, "Golem": {"limit": 3, "cost": 50}, "Dwarf": {"limit": 3, "cost": 50}, "Gorilla": {"limit": 3, "cost": 50}, "Cerberus": {"limit": 3, "cost": 45}, "Vampire": {"limit": 3, "cost": 40}, "Archer": {"limit": 3, "cost": 35}, "Spider": {"limit": 3, "cost": 30}, "Greebler": {"limit": 3, "cost": 30}, "Skeleton": {"limit": 3, "cost": 20}, "Leprechaun": {"limit": 3, "cost": 20}, "Rat": {"limit": 3, "cost": 15}, "Fire Sword": {"limit": 1, "cost": 70}, "Ice Shield": {"limit": 1, "cost": 70}, "Sword": {"limit": 3, "cost": 30}, "Shield": {"limit": 3, "cost": 30}, "Heal": {"limit": 3, "cost": 50}, "Cleanse": {"limit": 3, "cost": 50}, "Antidote": {"limit": 3, "cost": 20}, "Charge!": {"limit": 3, "cost": 50}, "Summon": {"limit": 3, "cost": 60}, "Sacrifice": {"limit": 3, "cost": 40}, "Fireball": {"limit": 3, "cost": 50}, "Lightning": {"limit": 3, "cost": 35}, "Poison": {"limit": 3, "cost": 40}, "Curse": {"limit": 3, "cost": 20}, "Weaken": {"limit": 3, "cost": 30}, "Vulnerable": {"limit": 3, "cost": 30}, "Strip": {"limit": 3, "cost": 30}, "Psychic": {"limit": 3, "cost": 80}, "Necromancy": {"limit": 1, "cost": 100}, "Combine": {"limit": 3, "cost": 50}, "Steal": {"limit": 3, "cost": 60}, "Reinforce": {"limit": 3, "cost": 40}, "Black Hole": {"limit": 2, "cost": 100}, "Flood": {"limit": 3, "cost": 30}, "Doom": {"limit": 3, "cost": 60}, "Forget": {"limit": 3, "cost": 70}, "Telescope": {"limit": 3, "cost": 30}, "Barrier": {"limit": 3, "cost": 30}, "Reborn": {"limit": 3, "cost": 70}, "Beckon": {"limit": 3, "cost": 70}, "Gift": {"limit": 3, "cost": 50}, "Restore": {"limit": 3, "cost": 70}, "Pack A Punch!": {"limit": 2, "cost": 100}};
   Object.assign(DECK_RULES,{
+    'The Emo':{limit:3,cost:30},
     Slime:{limit:3,cost:35},Witch:{limit:3,cost:45},Werewolf:{limit:3,cost:45},Ghost:{limit:3,cost:30},
     Mimic:{limit:3,cost:45},Kraken:{limit:2,cost:90},Cyclops:{limit:2,cost:65},
     'Double Strike':{limit:2,cost:70},Berserk:{limit:3,cost:45},Undying:{limit:2,cost:70},
@@ -143,7 +163,7 @@
       const [attack,defense,health,summon,attacks,text] = MONSTERS[name];
       const custom=customDefinitions.has(name)?JSON.parse(JSON.stringify(customDefinitions.get(name))):null;
       const flesh = custom?!custom.poisonImmune:!NON_FLESH.has(name);
-      return {uid,name,owner,type:'monster',attack,baseAttack:attack,defense,baseDefense:defense,health,maxHealth:health,summon,summonLeft:summon,attacks,baseAttacks:attacks,attacksLeft:attacks,text,flesh,sentient:custom?!custom.psychicImmune:!NON_SENTIENT.has(name),effects:[],ghostWard:['Ghost','Wraith'].includes(name),werewolfBoost:0,custom,abilityUses:{}};
+      return {uid,name,owner,type:'monster',attack,baseAttack:attack,defense,baseDefense:defense,health,maxHealth:health,summon,summonLeft:summon,attacks,baseAttacks:attacks,attacksLeft:attacks,text,flesh,sentient:custom?!custom.psychicImmune:!NON_SENTIENT.has(name),effects:[],werewolfBoost:0,custom,abilityUses:{}};
     }
     return {uid,name,owner,type:MAGIC[name][0],text:MAGIC[name][1]};
   }
@@ -243,7 +263,9 @@
   }
   function log(message){ state.logs.unshift(message); state.logs=state.logs.slice(0,5); }
   function toast(message){ const el=$('#toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),1500); }
-  function sound(id){ const a=$(id); if(a){ a.currentTime=0; a.play().catch(()=>{}); } }
+  let audioEnabled=true;
+  function sound(id){ const a=$(id); if(audioEnabled&&a){ a.currentTime=0; a.play().catch(()=>{}); } }
+  function syncMenuMusic(){const music=$('#menu-music');if(!music)return;if(audioEnabled&&!$('#title').classList.contains('hidden')){music.volume=.32;music.play().catch(()=>{})}else music.pause()}
   function current(){ return state.players[state.current]; }
   function opponent(){ return state.players[1-state.current]; }
   function effect(card,name){ return card.effects?.find(e=>e.name===name); }
@@ -357,11 +379,13 @@
     const showWait=card.type==='monster'&&zone!=='battle'&&(zone!=='field'||wait>0);
     const summoningUi=card.type==='monster'&&zone==='field'&&card.summonLeft>0?`<span class="summoning-overlay"><small>Summoning…</small><b>${card.summonLeft}</b></span>`:'';
     const monsterUi=card.type==='monster'?`${showWait?`<span class="turn-badge">${wait} turn${wait===1?'':'s'}</span>`:''}<span class="monster-health" aria-label="${Math.max(0,card.health)} of ${card.maxHealth} health">${health}</span>${summoningUi}`:'';
-    const frozenUi=card.type==='monster'&&effect(card,'Freeze')?'<span class="frozen-overlay"><img src="assets/status-frozen.png" alt=""><b>Frozen</b></span>':'';
+    const frozenUi=card.type==='monster'&&effect(card,'Freeze')?'<span class="frozen-overlay" aria-label="Frozen"><img src="assets/status-frozen.png" alt=""></span>':'';
     const stats=card.type==='monster'?`<span class="stats"><i class="stat attack">${family(card)==='Mimic'?'?':card.attack}</i><i class="stat defense">${family(card)==='Mimic'?'?':card.defense}</i></span>`:'';
     const brief=card.custom?card.custom.description:card.text;
-    button.innerHTML=`<span class="card-name">${esc(card.name)}</span><img class="card-art" src="assets/${card.custom?'m-greebler.png':img}" alt="">${monsterUi}<span class="card-text">${esc(brief)}</span>${stats}<span class="effect-tags">${tags}</span>${frozenUi}${effect(card,'Stunned')?'<span class="stunned-overlay"><img src="assets/status-stunned.svg" alt=""><b>Stunned</b></span>':''}`;
+    button.innerHTML=`<span class="card-name">${esc(card.name)}</span><img class="card-art" src="assets/${card.custom?'m-greebler.png':img}" alt="">${monsterUi}<span class="card-text">${esc(brief)}</span>${stats}<span class="effect-tags">${tags}</span>${frozenUi}${effect(card,'Stunned')?'<span class="stunned-overlay" aria-label="Stunned"><img src="assets/status-stunned.svg" alt=""></span>':''}`;
     if(card.custom){button.querySelector('.card-art').src=card.custom.image||'assets/m-greebler.png';button.classList.add('custom-monster');if(card.maxHealth>12)button.classList.add('dense-health')}
+    const combiner=combinerBase(card);
+    if(combiner){button.classList.add('has-combiner');const symbol=document.createElement('span');symbol.className='combiner-symbol';if(['The Emo','Robot'].includes(combiner))symbol.classList.add('wilted-flower');symbol.textContent=COMBINER_SYMBOLS[combiner];symbol.setAttribute('aria-label',symbol.classList.contains('wilted-flower')?'Wilted black flower combiner symbol':'Combiner symbol');button.append(symbol)}
     if(ART_ALIASES[card.name]&&Object.values(UPGRADE_FOR).includes(card.name)){
       const decal=document.createElement('img');decal.className='upgrade-decal';decal.src='assets/upgrade-overlay.png';decal.alt='';button.append(decal);
     }
@@ -544,7 +568,7 @@
     if(!free&&(state.over||state.paused||state.animating||p!==current()||!p.hand.includes(card)))return false;
     if(!p.hand.includes(card) && !p.deck.includes(card) && !p.grave.includes(card))return false;
     for(const pile of ['hand','deck','grave']){const i=p[pile].indexOf(card);if(i>=0)p[pile].splice(i,1)}
-    p.field.push(card); card.health=card.maxHealth; card.summonLeft=card.summon; card.attacksLeft=card.attacks;card.ghostWard=family(card)==='Ghost';card.werewolfBoost=0;card.abilityUses={};if(!free)p.deploys--;
+    p.field.push(card); card.health=card.maxHealth; card.summonLeft=card.summon; card.attacksLeft=card.attacks;card.werewolfBoost=0;card.abilityUses={};if(!free)p.deploys--;
     if(family(card)==='Kraken')state.players[1-p.index].field.slice().forEach(enemy=>damageMonster(enemy,1));
     customEvent(card,'summon');
     state.selected=null; log(`${p.name} summoned ${card.name}.`); sound('#card-sound');render();return true;
@@ -558,13 +582,21 @@
     log(`${card.name} upgraded into ${upgraded.name}.`);return true;
   }
   function combineCandidates(player,name){
-    const hand=player.hand.filter(card=>card.name===name);
-    const field=player.field.filter(card=>card.name===name).sort((a,b)=>a.health-b.health||a.summonLeft-b.summonLeft);
-    return [...hand,...field].slice(0,2);
+    const hand=player.hand.filter(card=>combinerBase(card)===name);
+    const field=player.field.filter(card=>combinerBase(card)===name).sort((a,b)=>a.health-b.health||a.summonLeft-b.summonLeft);
+    return [...field,...hand].slice(0,1);
   }
   function discardCombinationPart(card){
-    if(card.owner.field.includes(card))kill(card);
-    else if(card.owner.hand.includes(card)){animateCardToGrave(card);takeCard(card,'hand','grave')}
+    // Fusion consumes ingredients; it is not a death or a graveyard discard.
+    // Remove state first so animation callbacks cannot restore a stale field card.
+    for(const pile of ['field','hand']){
+      const index=card.owner[pile].indexOf(card);
+      if(index>=0)card.owner[pile].splice(index,1);
+    }
+    departingCards.delete(card.uid);
+    visibleCards.delete(card.uid);
+    if(state.selected?.uid===card.uid)state.selected=null;
+    removeEffects(card,true);removeEffects(card,false);
   }
   function consume(card){if(!card.owner.hand.includes(card))return;spellFlash(card);state.selected=null;const p=card.owner;animateCardToGrave(card);const i=p.hand.indexOf(card);if(i>=0)p.hand.splice(i,1);p.grave.push(card);log(`${p.name} cast ${card.name}.`)}
   function playTargeted(spell,target){
@@ -590,7 +622,7 @@
       case 'Poison': if(!target.flesh)return false;return addEffect(target,'Poison',false);
       case 'Freeze':if(effect(target,'Freeze'))return false;target.attacksLeft=0;return addEffect(target,'Freeze',false);
       case 'Time Warp':target.summonLeft+=2;return true;
-      case 'Curse': if(effect(target,'Curse')||(target.attack<1&&target.defense<1))return false;value={attack:Math.min(1,target.attack),defense:Math.min(1,target.defense)};target.attack-=value.attack;target.defense-=value.defense;return addEffect(target,'Curse',false,value);
+      case 'Curse': return curseMonster(target);
       case 'Weaken': if(effect(target,'Weaken')||target.attack<1)return false;value=Math.min(3,target.attack);target.attack-=value;return addEffect(target,'Weaken',false,value);
       case 'Vulnerable': if(effect(target,'Vulnerable')||target.defense<1)return false;value=Math.min(3,target.defense);target.defense-=value;return addEffect(target,'Vulnerable',false,value);
       case 'Strip': return removeEffects(target,true);
@@ -617,13 +649,25 @@
       case 'Reborn':pool=p.grave.filter(c=>c.type==='monster');if(!pool.length)return false;target=pool.sort((a,b)=>cardStrength(b)-cardStrength(a))[0];p.grave.splice(p.grave.indexOf(target),1);target.owner=p;p.hand.push(target);return true;
       case 'Beckon':pool=p.deck.filter(c=>c.type==='monster');if(!pool.length)return false;target=pool.sort((a,b)=>cardStrength(b)-cardStrength(a))[0];return deploy(target,true);
       case 'Necromancy':for(const pile of ['deck','hand','grave']){for(const c of [...p[pile]])if(c.name==='Skeleton'){deploy(c,true);worked=true}}return worked;
-      case 'Combine':for(const [base,,result] of COMBOS){const parts=combineCandidates(p,base);if(parts.length===2){parts.forEach(discardCombinationPart);p.deck.push(makeCard(result,p));draw(p,1);log(`Two ${base} cards combined into ${result}.`);return true}}return false;
+      case 'Combine':for(const [first,second,result] of COMBOS){const parts=[...combineCandidates(p,first),...combineCandidates(p,second)];if(parts.length===2){const punched=parts.filter(c=>c.name===UPGRADE_FOR[combinerBase(c)]).length;const keepsUpgrade=punched===2||(punched===1&&Math.random()<.5);const resultName=keepsUpgrade?UPGRADE_FOR[result]:result;parts.forEach(discardCombinationPart);p.hand.push(makeCard(resultName,p));log(`${first} + ${second} combined into ${resultName}.`);return true}}return false;
       default:return false;
     }
   }
   function battleAttackValue(attacker,defender){const copy=ability(attacker,'mimic');return (family(attacker)==='Mimic'||copy)&&family(defender)!=='Mimic'&&!ability(defender,'mimic')?Math.round(defender.attack*(copy?copy.power/100:1)):attacker.attack}
   function battleDefenseValue(defender,attacker){const copy=ability(defender,'mimic');return (family(defender)==='Mimic'||copy)&&family(attacker)!=='Mimic'&&!ability(attacker,'mimic')?Math.round(attacker.defense*(copy?copy.power/100:1)):defender.defense}
-  function ghostBlocksAttack(card){if(family(card)==='Ghost'&&card.ghostWard){card.ghostWard=false;return true}const ward=ability(card,'ward');if(ward&&(card.abilityUses.ward||0)<ward.power&&procs(ward)){card.abilityUses.ward=(card.abilityUses.ward||0)+1;return true}return false}
+  function ghostBlocksAttack(card){const ward=ability(card,'ward');if(ward&&(card.abilityUses.ward||0)<ward.power&&procs(ward)){card.abilityUses.ward=(card.abilityUses.ward||0)+1;return true}return false}
+  function emoReaction(attacker,defender,attackRoll,defenseRoll){
+    const card=attackRoll>defenseRoll?defender:defenseRoll>attackRoll&&!counterImmune(attacker)?attacker:null;
+    return card&&['The Emo','The Eternal Emo','Emo Robot','Emo Robot Prime'].includes(card.name)&&Math.random()<0.25?{uid:card.uid,quote:EMO_QUOTES[Math.floor(Math.random()*EMO_QUOTES.length)]}:null;
+  }
+  async function showEmoReaction(selector,reaction){
+    $('#battle-result').textContent=`“${reaction.quote}”`;
+    const container=$(selector);container.classList.add('emo-reaction');
+    const hearts=[];
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){await wait(1800);container.classList.remove('emo-reaction');return}
+    for(let i=0;i<7;i++){const heart=document.createElement('span');heart.className='emo-heart';heart.textContent='♥';heart.setAttribute('aria-hidden','true');heart.style.setProperty('--heart-x',`${(i-3)*15}px`);heart.style.setProperty('--heart-delay',`${i*90}ms`);container.append(heart);hearts.push(heart)}
+    await wait(1800);hearts.forEach(heart=>heart.remove());container.classList.remove('emo-reaction');
+  }
   async function battle(attacker,defender){
     if(state.over||state.paused)return false;
     if(state.barrier>0){toast('The barrier prevents attacks.');return false}
@@ -638,13 +682,15 @@
     $('#battle-attacker').replaceChildren(renderCard({...attacker,attack:attackPower},'battle'));$('#battle-defender').replaceChildren(renderCard({...defender,defense:defensePower},'battle'));
     $('#battle-result').textContent='Rolling…';panel.classList.remove('hit','block');overlay.classList.remove('hidden');
     const attackRoll=profile.attackMin+Math.floor(Math.random()*(attackPower-profile.attackMin+1));const defenseRoll=profile.defenseMin+Math.floor(Math.random()*(defensePower-profile.defenseMin+1));
-    if(online?.active&&online.host)online.battle({attacker:networkCard(attacker),defender:networkCard(defender),attackPower,defensePower,attackRoll,defenseRoll});
+    const reaction=emoReaction(attacker,defender,attackRoll,defenseRoll);
+    if(online?.active&&online.host)online.battle({attacker:networkCard(attacker),defender:networkCard(defender),attackPower,defensePower,attackRoll,defenseRoll,reaction});
     await dramaticRoll({attack:attackPower,min:profile.attackMin},{defense:defensePower,min:profile.defenseMin},attackRoll,defenseRoll);
     if(session!==state.session)return false;
     $('#attack-roll').textContent=attackRoll;$('#defense-roll').textContent=defenseRoll;
     let line=`${attacker.name} rolled ${attackRoll} vs ${defender.name} ${defenseRoll}.`;
     let damaged=null,healthBefore=0;
-    if(attackRoll>defenseRoll&&ghostBlocksAttack(defender)){$('#battle-result').textContent=`${defender.name}'s ward blocks the attack`;panel.classList.add('block');line+=' Ward negated the attack.';await wait(650)}
+    if(reaction){panel.classList.add('block');await showEmoReaction(reaction.uid===attacker.uid?'#battle-attacker':'#battle-defender',reaction);line+=` “${reaction.quote}” No damage.`}
+    else if(attackRoll>defenseRoll&&ghostBlocksAttack(defender)){$('#battle-result').textContent=`${defender.name}'s ward blocks the attack`;panel.classList.add('block');line+=' Ward negated the attack.';await wait(650)}
     else if(attackRoll>defenseRoll){const dmg=battleDamage(attackRoll,defenseRoll);damaged=defender;healthBefore=defender.health;$('#battle-result').textContent=`${defender.name} takes ${dmg} damage`;panel.classList.add('hit');await wait(220);damageMonster(defender,dmg,false);onHit(attacker,defender,dmg,false);await animateBattleDamage('#battle-defender',Math.max(0,healthBefore-defender.health));line+=` ${dmg} damage!`;sound('#hit-sound')}
     else if(defenseRoll>attackRoll&&!counterImmune(attacker)){const dmg=battleDamage(defenseRoll,attackRoll);damaged=attacker;healthBefore=attacker.health;$('#battle-result').textContent=`${attacker.name} takes ${dmg}${family(attacker)==='Cyclops'?' + 1 recoil':''} damage`;panel.classList.add('block');await wait(220);damageMonster(attacker,dmg,false);onHit(defender,attacker,dmg,false);if(attacker.owner.field.includes(attacker)&&family(attacker)==='Cyclops')damageMonster(attacker,1,false);await animateBattleDamage('#battle-attacker',Math.max(0,healthBefore-attacker.health));line+=` ${attacker.name} takes ${Math.max(0,healthBefore-attacker.health)}.`;sound('#hit-sound')}
     else if(family(attacker)==='Cyclops'){damaged=attacker;healthBefore=attacker.health;$('#battle-result').textContent='Cyclops takes 1 recoil damage';panel.classList.add('block');await wait(220);damageMonster(attacker,1,false);await animateBattleDamage('#battle-attacker',Math.max(0,healthBefore-attacker.health));line+=' Cyclops takes 1 recoil damage.';sound('#hit-sound')}
@@ -662,15 +708,27 @@
     if(!effect(target,'Freeze'))hexes.push(()=>{target.attacksLeft=0;return addEffect(target,'Freeze',false)});
     if(!hexes.length)return false;hexes[Math.floor(Math.random()*hexes.length)]();log(`${target.name} was hexed by the Witch.`);return true;
   }
+  function curseMonster(target){
+    if(!target?.owner.field.includes(target)||effect(target,'Curse')||(target.attack<1&&target.defense<1))return false;
+    const value={attack:Math.min(1,target.attack),defense:Math.min(1,target.defense)};
+    target.attack-=value.attack;target.defense-=value.defense;
+    return addEffect(target,'Curse',false,value);
+  }
   function onHit(attacker,target,damage,animate=true){
+    if(damage>0){
+      const cursed=[];
+      if(target&&target.owner!==attacker.owner&&family(attacker)==='Ghost')cursed.push(target);
+      if(target&&target.owner!==attacker.owner&&family(target)==='Ghost')cursed.push(attacker);
+      for(const victim of new Set(cursed))if(curseMonster(victim))log(`${victim.name} is cursed: -1 attack and defense.`);
+    }
     customEvent(attacker,'hit',target,damage,animate);
     const thorns=target&&ability(target,'thorns');
     if(damage>0&&thorns&&target.owner.field.includes(target)&&attacker.owner.field.includes(attacker)&&procs(thorns))damageMonster(attacker,thorns.power,animate);
     if(!target)return;
     if(['Ogre','Gorilla','Ogre Warlord','Titan Ape'].includes(attacker.name)){target.attacksLeft=0;if(!effect(target,'Stunned'))addEffect(target,'Stunned',false)}
-    if(['Reaper','Death Knight'].includes(attacker.name)){if(effect(target,'Reaper'))addEffect(target,'Reaper',false,1);else{target.attack=Math.max(0,target.attack-1);addEffect(target,'Reaper',false,1)}}
-    if(['Spider','Rat','Broodmother'].includes(attacker.name)&&target.flesh)addEffect(target,'Poison',false);
-    if(['Ninja','Ninja Rat','Shadow Master'].includes(attacker.name)&&target.owner.field.includes(target))damageMonster(target,target.health,animate);
+    if(['Reaper','Death Knight'].includes(family(attacker))){if(effect(target,'Reaper'))addEffect(target,'Reaper',false,1);else{target.attack=Math.max(0,target.attack-1);addEffect(target,'Reaper',false,1)}}
+    if(['Spider','Rat','Broodmother'].includes(family(attacker))&&target.flesh)addEffect(target,'Poison',false);
+    if(['Ninja','Ninja Rat','Shadow Master'].includes(family(attacker))&&target.owner.field.includes(target))damageMonster(target,target.health,animate);
     if(['Vampire','Vampire Lord'].includes(attacker.name))healMonster(attacker,damage);
     if(family(attacker)==='Witch'&&target.owner.field.includes(target))witchHex(target);
     captureDefeated(attacker,target,damage);
@@ -723,7 +781,8 @@
     state.current=1-state.current; startTurn();
   }
   function startTurn(){
-    const p=current();p.deploys=1;draw(p,1);log(`${p.name}'s turn.`);render();
+    const p=current();
+    p.deploys=1;draw(p,1);log(`${p.name}'s turn.`);render();
     if(state.over)return;
     if(p.controller==='computer'){const session=state.session;setTimeout(()=>{if(session===state.session)aiTurn()},650)}
     else if(!online?.active&&state.players.every(x=>x.controller==='human'))showPassModal(p);
@@ -844,12 +903,13 @@
     surrender(seat){if(!state.over)finishGame(1-seat,`${state.players[seat].name} surrendered.`)},
     remoteBattle(packet){
       validateWireCard(packet.attacker);validateWireCard(packet.defender);
+      if(packet.reaction&&(![packet.attacker.uid,packet.defender.uid].includes(packet.reaction.uid)||!EMO_QUOTES.includes(packet.reaction.quote)))throw Error('Invalid battle reaction.');
       for(const key of ['attackPower','defensePower','attackRoll','defenseRoll'])if(!Number.isSafeInteger(packet[key])||packet[key]<0||packet[key]>1000000)throw Error('Invalid battle roll.');
       const a=reviveNetwork(packet.attacker,state.players),d=reviveNetwork(packet.defender,state.players);
       state.animating=true;state.selected=null;render();
       $('#battle-attacker').replaceChildren(renderCard({...a,attack:packet.attackPower},'battle'));$('#battle-defender').replaceChildren(renderCard({...d,defense:packet.defensePower},'battle'));
       $('#battle-result').textContent='Rolling…';$('#battle-overlay').classList.remove('hidden');$('#battle-overlay .battle-panel').classList.remove('hit','block');
-      remoteRoll=dramaticRoll({attack:packet.attackPower},{defense:packet.defensePower},packet.attackRoll,packet.defenseRoll);remoteRoll.cards=[a,d];
+      remoteRoll=dramaticRoll({attack:packet.attackPower},{defense:packet.defensePower},packet.attackRoll,packet.defenseRoll);remoteRoll.cards=[a,d];remoteRoll.reaction=packet.reaction;
     },
     async receive(data,initial){
       const session=state.session;
@@ -857,7 +917,8 @@
       if(remoteRoll){const roll=remoteRoll;await roll;if(session!==state.session)return;
         const all=data.players.flatMap(p=>[...p.field,...p.grave]);
         const results=[];for(const [i,card] of roll.cards.entries()){const updated=all.find(c=>c.uid===card.uid);const damage=updated?Math.max(0,card.health-updated.health):0;if(damage){results.push(`${card.name} takes ${damage} damage`);await animateBattleDamage(i===0?'#battle-attacker':'#battle-defender',damage)}}
-        $('#battle-result').textContent=results.join(' · ')||'No damage';await wait(340);if(session!==state.session)return;$('#battle-overlay').classList.add('hidden');remoteRoll=null;
+        if(roll.reaction)await showEmoReaction(roll.reaction.uid===roll.cards[0].uid?'#battle-attacker':'#battle-defender',roll.reaction);
+        else $('#battle-result').textContent=results.join(' · ')||'No damage';await wait(340);if(session!==state.session)return;$('#battle-overlay').classList.add('hidden');remoteRoll=null;
       }
       const previous=state.players.flatMap(p=>p.field);
       for(const card of previous){const updated=data.players.flatMap(p=>[...p.field,...p.grave]).find(c=>c.uid===card.uid);const damage=updated?Math.max(0,card.health-updated.health):0;if(damage)animateMonsterDamage(card,damage);if(data.players.some(p=>p.grave.some(c=>c.uid===card.uid))){departingCards.set(card.uid,card);animateCardToGrave(card,100+Math.min(damage,50)*95)}}
@@ -890,5 +951,9 @@
   state.controllers.forEach((_,i)=>syncControllerName(i));
   $$('.hand,.field').forEach(row=>{row.addEventListener('wheel',e=>{if(row.scrollWidth>row.clientWidth){e.preventDefault();row.scrollLeft+=e.deltaY||e.deltaX}},{passive:false});row.addEventListener('keydown',e=>{if(e.target===row&&['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();row.scrollLeft+=(e.key==='ArrowRight'?1:-1)*100}})});
   $('#start-game').addEventListener('click',begin);$('#how-to').addEventListener('click',showRules);$('#menu-button').addEventListener('click',openMenu);$('#end-turn').addEventListener('click',endTurn);$('#opponent-target').addEventListener('click',attackPlayer);
+  $('#audio-toggle').addEventListener('click',()=>{audioEnabled=!audioEnabled;$('#audio-toggle').textContent=audioEnabled?'♫ Sound On':'♫ Sound Off';$('#audio-toggle').setAttribute('aria-pressed',String(audioEnabled));syncMenuMusic()});
+  document.addEventListener('pointerdown',syncMenuMusic,{once:true,capture:true});
+  document.addEventListener('click',e=>{if(e.target.closest?.('button:not(.card):not(.end-turn):not(.opponent-target):not(#audio-toggle)'))sound('#ui-sound')});
+  if(typeof MutationObserver!=='undefined')new MutationObserver(syncMenuMusic).observe($('#title'),{attributes:true,attributeFilter:['class']});
   document.addEventListener('keydown',e=>{if(e.target?.closest?.('input,textarea,select,[contenteditable="true"],#online-chat'))return;if(e.key==='Enter'&&!$('#game').classList.contains('hidden'))endTurn();if(e.key==='Escape'&&!$('#game').classList.contains('hidden')&&!$('#modal').open)openMenu()});
 })();

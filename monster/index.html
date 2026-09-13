@@ -11,8 +11,7 @@
 <body>
   <main id="app">
     <section id="title" class="screen title-screen" aria-label="Monster Master title screen">
-      <img class="cmg-logo" src="assets/cmg-logo.svg" alt="Crazy Monkey Games">
-      <div class="title-brand"><span>Monster</span><span>Master</span></div>
+      <div class="title-brand"><span>Monster</span><span>Master</span><strong>Remastered</strong></div>
       <img class="title-monster" src="assets/title-minotaur.svg" alt="Minotaur holding an axe">
       <div class="title-menu">
         <button id="title-play">Play Offline</button>
@@ -20,7 +19,7 @@
         <button id="title-private">Play Private Match</button>
         <button id="how-to">Instructions</button>
       </div>
-      <small class="edition">HTML5 Edition</small>
+      <button id="audio-toggle" class="audio-toggle" type="button" aria-pressed="true">♫ Sound On</button>
     </section>
 
     <section id="online" class="screen online-screen hidden" aria-label="Online play">
@@ -155,6 +154,8 @@
   <div id="drag-ghost" class="drag-ghost hidden"></div>
   <audio id="card-sound" src="assets/card.mp3" preload="auto"></audio>
   <audio id="hit-sound" src="assets/hit.mp3" preload="auto"></audio>
+  <audio id="ui-sound" src="assets/ui.mp3" preload="auto"></audio>
+  <audio id="menu-music" src="assets/menu-theme.mp3" preload="auto" loop></audio>
   <script src="custom-cards.js"></script>
   <aside id="online-chat" class="online-chat hidden" aria-label="Opponent chat">
     <button id="chat-toggle" aria-expanded="false" aria-controls="chat-panel">Chat</button>

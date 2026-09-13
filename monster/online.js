@@ -1,7 +1,7 @@
 /* NetplayJS protocol v1 adapter. See THIRD-PARTY-NOTICES.md. */
 (() => {
   'use strict';
-  const VERSION='monster-master-online-v2';
+  const VERSION='monster-master-online-v6';
   const SERVER='wss://netplayjs.varunramesh.net/';
   const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const $=s=>document.querySelector(s);
