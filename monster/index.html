@@ -7,6 +7,8 @@
   <meta name="description" content="Monster Master — the original tactical card battle, rebuilt for HTML5.">
   <title>Monster Master</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="classic.css">
+  <script src="asset-fallbacks.js"></script>
 </head>
 <body>
   <main id="app">
@@ -96,7 +98,7 @@
     <section id="game" class="screen game-screen hidden" aria-label="Monster Master game board">
       <div id="opponent" class="player-half opponent-half">
         <aside class="player-rail">
-          <div class="pile deck"><img src="assets/card-back.svg" alt=""><span id="p2-deck">40</span></div>
+          <div class="pile deck"><img src="assets/classic-card-back.svg" alt=""><span id="p2-deck">40</span></div>
           <strong id="p2-label">Computer</strong>
           <img id="p2-avatar" class="board-avatar" src="assets/avatar-0.svg" alt="">
           <div class="player-health red"><i id="p2-life-bar"></i><b id="p2-life">20</b></div>
@@ -121,7 +123,7 @@
           <strong id="p1-label">Player 1</strong>
           <img id="p1-avatar" class="board-avatar" src="assets/avatar-1.svg" alt="">
           <div class="player-health blue"><i id="p1-life-bar"></i><b id="p1-life">20</b></div>
-          <div class="pile deck"><img src="assets/card-back.svg" alt=""><span id="p1-deck">40</span></div>
+          <div class="pile deck"><img src="assets/classic-card-back.svg" alt=""><span id="p1-deck">40</span></div>
         </aside>
         <div class="play-area">
           <div id="p1-field" class="field" aria-label="Your monsters"></div>
